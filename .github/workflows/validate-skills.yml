@@ -31,3 +31,51 @@ jobs:
             fi
           done
           exit $exit_code
+
+  test-dns-server:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install dependencies
+        working-directory: evals
+        run: uv sync
+
+      - name: Test DNS server
+        working-directory: evals
+        run: |
+          uv run python -c "
+          from dns_server import TestDNSServer
+          from test_zones import get_all_zones, TEST_DOMAIN
+          import subprocess
+          import time
+
+          zones = get_all_zones()
+          server = TestDNSServer(zones, port=5053)
+          server.start()
+          time.sleep(0.5)
+
+          # Test SPF valid
+          result = subprocess.run(['dig', '@127.0.0.1', '-p', '5053', f'spf-valid.{TEST_DOMAIN}', 'TXT', '+short'], capture_output=True, text=True)
+          assert 'v=spf1' in result.stdout, f'SPF valid test failed: {result.stdout}'
+
+          # Test SPF multiple (should return 2 records)
+          result = subprocess.run(['dig', '@127.0.0.1', '-p', '5053', f'spf-multiple.{TEST_DOMAIN}', 'TXT', '+short'], capture_output=True, text=True)
+          lines = [l for l in result.stdout.strip().split('\n') if l]
+          assert len(lines) == 2, f'SPF multiple test failed: expected 2 records, got {len(lines)}'
+
+          # Test multi-a (should return 3 records)
+          result = subprocess.run(['dig', '@127.0.0.1', '-p', '5053', f'multi-a.{TEST_DOMAIN}', 'A', '+short'], capture_output=True, text=True)
+          lines = [l for l in result.stdout.strip().split('\n') if l]
+          assert len(lines) == 3, f'Multi-A test failed: expected 3 records, got {len(lines)}'
+
+          server.stop()
+          print('All DNS server tests passed!')
+          "
