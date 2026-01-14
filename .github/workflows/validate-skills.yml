@@ -137,7 +137,7 @@ jobs:
         run: |
           uv run python << 'PYTHON_SCRIPT'
           import json
-          import gzip
+          import zipfile
           import os
           from pathlib import Path
           from datetime import datetime
@@ -162,7 +162,7 @@ jobs:
               for item in log_dir.rglob("*"):
                   print(f"  {item}", flush=True)
 
-          # Look for .eval files (InspectAI log format - gzip compressed)
+          # Look for .eval files (InspectAI log format - ZIP archives)
           log_files = list(log_dir.rglob("*.eval")) if log_dir.exists() else []
 
           # Also check for .json files as fallback
@@ -185,10 +185,16 @@ jobs:
 
           print(f"Reading log file: {log_file}", flush=True)
 
-          # .eval files are gzip compressed JSON
+          # .eval files are ZIP archives containing JSON
           if log_file.suffix == ".eval":
-              with gzip.open(log_file, "rt", encoding="utf-8") as f:
-                  log_data = json.load(f)
+              with zipfile.ZipFile(log_file, "r") as zf:
+                  # Find the JSON file inside the archive
+                  json_files = [n for n in zf.namelist() if n.endswith(".json")]
+                  if json_files:
+                      with zf.open(json_files[0]) as f:
+                          log_data = json.load(f)
+                  else:
+                      raise ValueError(f"No JSON file found in {log_file}")
           else:
               with open(log_file) as f:
                   log_data = json.load(f)
