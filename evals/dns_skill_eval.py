@@ -10,10 +10,14 @@ from pathlib import Path
 from inspect_ai import Task, task
 from inspect_ai.dataset import Sample, MemoryDataset
 from inspect_ai.scorer import model_graded_fact
-from inspect_ai.solver import generate, system_message
+from inspect_ai.solver import generate, system_message, use_tools
+from inspect_ai.tool import bash
 
 from dns_server import TestDNSServer
 from test_zones import get_all_zones, SCENARIOS, TEST_DOMAIN
+
+# Timeout for bash commands (seconds)
+CMD_TIMEOUT = 30
 
 # Port for the test DNS server
 DNS_PORT = int(os.environ.get("DNS_TEST_PORT", "5053"))
@@ -23,11 +27,20 @@ SKILL_PATH = Path(__file__).parent.parent / "dns-troubleshooter"
 
 
 def get_skill_content() -> str:
-    """Load the dns-troubleshooter skill content."""
+    """Load the dns-troubleshooter skill content including references."""
+    content_parts = []
+
+    # Load main SKILL.md
     skill_md = SKILL_PATH / "SKILL.md"
     if skill_md.exists():
-        return skill_md.read_text()
-    return ""
+        content_parts.append(skill_md.read_text())
+
+    # Load SPF reference
+    spf_ref = SKILL_PATH / "references" / "spf.md"
+    if spf_ref.exists():
+        content_parts.append("\n\n## SPF Reference\n\n" + spf_ref.read_text())
+
+    return "\n".join(content_parts)
 
 
 def make_system_prompt() -> str:
@@ -146,9 +159,11 @@ def dns_troubleshooter_eval() -> Task:
         dataset=dataset,
         solver=[
             system_message(make_system_prompt()),
+            use_tools([bash(CMD_TIMEOUT)]),
             generate(),
         ],
         scorer=model_graded_fact(),
+        sandbox="local",
     )
 
 
@@ -164,9 +179,11 @@ def dns_spf_eval() -> Task:
         dataset=dataset,
         solver=[
             system_message(make_system_prompt()),
+            use_tools([bash(CMD_TIMEOUT)]),
             generate(),
         ],
         scorer=model_graded_fact(),
+        sandbox="local",
     )
 
 
@@ -182,9 +199,11 @@ def dns_conflict_eval() -> Task:
         dataset=dataset,
         solver=[
             system_message(make_system_prompt()),
+            use_tools([bash(CMD_TIMEOUT)]),
             generate(),
         ],
         scorer=model_graded_fact(),
+        sandbox="local",
     )
 
 
