@@ -23,14 +23,16 @@ jobs:
           python-version: "3.11"
 
       - name: Install skills-ref
-        run: pip install skills-ref
+        run: |
+          pip install skills-ref
+          echo "Installed to: $(pip show skills-ref | grep Location)"
 
       - name: Find and validate skills
         run: |
           exit_code=0
           for skill_dir in $(find . -name "SKILL.md" -exec dirname {} \; | sort -u); do
             echo "Validating: $skill_dir"
-            if ! python -m skills_ref validate "$skill_dir"; then
+            if ! python -c "import sys; sys.argv = ['skills-ref', 'validate', '$skill_dir']; from skills_ref.cli import main; main()"; then
               exit_code=1
             fi
           done
