@@ -32,10 +32,8 @@ jobs:
           done
           exit $exit_code
 
-  test-dns-server:
+  run-evals:
     runs-on: ubuntu-latest
-    outputs:
-      results: ${{ steps.test.outputs.results }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -50,105 +48,145 @@ jobs:
         working-directory: evals
         run: uv sync
 
-      - name: Test DNS server
-        id: test
+      - name: Run InspectAI evals
         working-directory: evals
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
+          # Start DNS server in background and run evals
           uv run python << 'PYTHON_SCRIPT'
           import subprocess
           import time
           import json
           import os
+          import sys
+          from pathlib import Path
 
           from dns_server import TestDNSServer
-          from test_zones import get_all_zones, TEST_DOMAIN, SCENARIOS
+          from test_zones import get_all_zones
 
+          # Start DNS server
           zones = get_all_zones()
           server = TestDNSServer(zones, port=5053)
           server.start()
           time.sleep(0.5)
+          print("DNS server started on port 5053")
 
-          results = []
-          all_passed = True
-
-          # Test each scenario
-          tests = [
-              ("spf-valid", "TXT", lambda out: "v=spf1" in out, "SPF record present"),
-              ("spf-multiple", "TXT", lambda out: len([l for l in out.strip().split('\n') if l]) == 2, "Returns 2 SPF records"),
-              ("spf-permissive", "TXT", lambda out: "+all" in out, "Contains +all"),
-              ("cname-conflict", "A", lambda out: "192.0.2.10" in out, "A record returned"),
-              ("cname-conflict", "CNAME", lambda out: "target.example.com" in out, "CNAME record returned"),
-              ("multi-a", "A", lambda out: len([l for l in out.strip().split('\n') if l]) == 3, "Returns 3 A records"),
-              ("duplicate-mx", "MX", lambda out: out.count("mail") >= 2, "Returns 2 MX records"),
-          ]
-
-          for test_name, record_type, check_fn, description in tests:
-              domain = f"{test_name}.{TEST_DOMAIN}"
+          try:
+              # Run the InspectAI eval
               result = subprocess.run(
-                  ['dig', '@127.0.0.1', '-p', '5053', domain, record_type, '+short'],
-                  capture_output=True, text=True
+                  ["uv", "run", "inspect", "eval", "dns_skill_eval.py", "--model", "anthropic/claude-sonnet-4-20250514"],
+                  capture_output=True,
+                  text=True,
+                  timeout=600
               )
-              passed = check_fn(result.stdout)
-              if not passed:
-                  all_passed = False
-              results.append({
-                  "test": f"{test_name} ({record_type})",
-                  "description": description,
-                  "passed": passed,
-                  "output": result.stdout.strip()[:100]
-              })
+              print(result.stdout)
+              if result.stderr:
+                  print(result.stderr, file=sys.stderr)
 
-          server.stop()
+              eval_exit_code = result.returncode
+          finally:
+              server.stop()
+              print("DNS server stopped")
 
-          # Write summary to file for later steps
-          with open("test_results.json", "w") as f:
-              json.dump({"passed": all_passed, "results": results}, f)
+          sys.exit(eval_exit_code)
+          PYTHON_SCRIPT
 
-          # Generate markdown summary
-          summary = "## DNS Server Test Results\n\n"
-          passed_count = sum(1 for r in results if r["passed"])
-          total_count = len(results)
+      - name: Parse and summarize eval results
+        if: always()
+        working-directory: evals
+        run: |
+          uv run python << 'PYTHON_SCRIPT'
+          import json
+          import os
+          from pathlib import Path
+          from datetime import datetime
 
-          if all_passed:
-              summary += f"**Status:** All {total_count} tests passed\n\n"
+          # Find the most recent log file
+          log_dir = Path(".inspect")
+          if not log_dir.exists():
+              log_dir = Path.home() / ".inspect" / "logs"
+
+          log_files = list(log_dir.rglob("*.json")) if log_dir.exists() else []
+
+          if not log_files:
+              summary = "## DNS Troubleshooter Eval Results\n\n"
+              summary += "**Status:** No eval logs found\n"
+              with open(os.environ.get("GITHUB_STEP_SUMMARY", "summary.md"), "a") as f:
+                  f.write(summary)
+              with open("summary.md", "w") as f:
+                  f.write(summary)
+              exit(0)
+
+          # Get the most recent log
+          log_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+          log_file = log_files[0]
+
+          print(f"Reading log file: {log_file}")
+
+          with open(log_file) as f:
+              log_data = json.load(f)
+
+          # Extract results
+          results = log_data.get("results", {})
+          samples = log_data.get("samples", [])
+
+          total = len(samples)
+          correct = sum(1 for s in samples if s.get("scores", {}).get("model_graded_fact", {}).get("value") == "C")
+          incorrect = sum(1 for s in samples if s.get("scores", {}).get("model_graded_fact", {}).get("value") == "I")
+
+          # Build summary
+          summary = "## DNS Troubleshooter Eval Results\n\n"
+
+          if total > 0:
+              pct = (correct / total) * 100
+              summary += f"**Score:** {correct}/{total} ({pct:.1f}%)\n\n"
           else:
-              summary += f"**Status:** {passed_count}/{total_count} tests passed\n\n"
+              summary += "**Score:** No samples evaluated\n\n"
 
-          summary += "| Test | Description | Status |\n"
-          summary += "|------|-------------|--------|\n"
-          for r in results:
-              status = "✅" if r["passed"] else "❌"
-              summary += f"| {r['test']} | {r['description']} | {status} |\n"
+          summary += "| Sample | Category | Expected | Result |\n"
+          summary += "|--------|----------|----------|--------|\n"
+
+          for sample in samples:
+              sample_id = sample.get("id", "unknown")
+              metadata = sample.get("metadata", {})
+              category = metadata.get("category", "unknown")
+              expected = metadata.get("expected_diagnosis", "unknown")
+
+              score = sample.get("scores", {}).get("model_graded_fact", {})
+              value = score.get("value", "?")
+
+              if value == "C":
+                  result_icon = "✅"
+              elif value == "I":
+                  result_icon = "❌"
+              else:
+                  result_icon = "⚠️"
+
+              summary += f"| {sample_id} | {category} | {expected} | {result_icon} |\n"
+
+          summary += f"\n*Eval run: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*\n"
 
           # Write to GitHub Actions summary
           with open(os.environ.get("GITHUB_STEP_SUMMARY", "/dev/null"), "a") as f:
               f.write(summary)
 
-          # Write summary to file for PR comment
+          # Write to file for PR comment
           with open("summary.md", "w") as f:
               f.write(summary)
 
-          # Set output for other steps
-          print(f"passed={str(all_passed).lower()}")
-
-          if not all_passed:
-              print("\nFailed tests:")
-              for r in results:
-                  if not r["passed"]:
-                      print(f"  - {r['test']}: {r['output']}")
-              exit(1)
-
-          print(f"\nAll {total_count} tests passed!")
+          print(summary)
           PYTHON_SCRIPT
 
-      - name: Upload test results
+      - name: Upload eval logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: dns-test-results
+          name: inspect-eval-logs
           path: |
-            evals/test_results.json
+            evals/.inspect/
             evals/summary.md
+          if-no-files-found: ignore
 
       - name: Find existing comment
         if: github.event_name == 'pull_request' && always()
@@ -156,7 +194,7 @@ jobs:
         id: find-comment
         with:
           issue-number: ${{ github.event.pull_request.number }}
-          body-includes: "## DNS Server Test Results"
+          body-includes: "## DNS Troubleshooter Eval Results"
 
       - name: Comment on PR
         if: github.event_name == 'pull_request' && always()
