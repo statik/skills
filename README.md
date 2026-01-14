@@ -31,20 +31,21 @@ mkdir -p ~/.claude/skills
 cp -r skills/dns-troubleshooter ~/.claude/skills/
 ```
 
-### VS Code with Claude Extension
+### VS Code with GitHub Copilot
 
 1. Open your project in VS Code
-2. Create a `.claude/skills/` directory in your workspace root
+2. Create a `.github/copilot/skills/` directory in your workspace root
 3. Copy the skill folder into it:
 
 ```
 your-project/
-├── .claude/
-│   └── skills/
-│       └── dns-troubleshooter/
-│           ├── SKILL.md
-│           └── references/
-│               └── spf.md
+├── .github/
+│   └── copilot/
+│       └── skills/
+│           └── dns-troubleshooter/
+│               ├── SKILL.md
+│               └── references/
+│                   └── spf.md
 └── ... your code
 ```
 
