@@ -34,6 +34,7 @@ Run `just` to see all available commands:
 | `just check` | Quick validation (no evals) |
 | `just test` | Run full evaluation suite |
 | `just test-bedrock` | Run evals using AWS Bedrock |
+| `just release <version>` | Create a new release |
 | `just clean` | Remove generated files |
 
 ## Adding a New Skill
@@ -44,6 +45,8 @@ Run `just` to see all available commands:
    ---
    name: my-skill
    description: What this skill does
+   metadata:
+     version: 1.0.0
    ---
 
    # My Skill
@@ -76,6 +79,63 @@ just test-bedrock
 - Run `just test` if you've modified skill behavior
 - Keep changes focused and well-described
 - CI will automatically run validation and evals on your PR
+
+## Publishing Releases
+
+Skills are distributed as versioned zip files via GitHub Releases.
+
+### Release Process
+
+1. **Update the version in SKILL.md**
+
+   Edit `dns-troubleshooter/SKILL.md` and update the `metadata.version` field in the frontmatter:
+   ```yaml
+   ---
+   name: dns-troubleshooter
+   description: ...
+   metadata:
+     version: 1.1.0  # bump this
+   ---
+   ```
+
+2. **Commit the version bump**
+   ```bash
+   git add dns-troubleshooter/SKILL.md
+   git commit -m "Bump dns-troubleshooter to v1.1.0"
+   git push
+   ```
+
+3. **Create the release**
+   ```bash
+   just release 1.1.0
+   ```
+
+   This command:
+   - Verifies the SKILL.md version matches the release version
+   - Checks for uncommitted changes
+   - Creates an annotated git tag (`v1.1.0`)
+   - Pushes the tag to GitHub
+
+4. **GitHub Actions takes over**
+
+   The `release.yml` workflow automatically:
+   - Creates a zip file of the skill directory
+   - Publishes a GitHub Release with the zip attached
+   - Includes installation instructions in the release notes
+
+### Version Numbering
+
+Follow [semantic versioning](https://semver.org/):
+- **MAJOR** (1.0.0 → 2.0.0): Breaking changes to skill behavior
+- **MINOR** (1.0.0 → 1.1.0): New features, backward compatible
+- **PATCH** (1.0.0 → 1.0.1): Bug fixes, documentation updates
+
+### Verifying a Release
+
+After pushing a tag, check the [Actions tab](https://github.com/statik/skills/actions) to monitor the release workflow. Once complete, verify:
+- The release appears on the [Releases page](https://github.com/statik/skills/releases)
+- The zip file downloads correctly
+- The zip contains the expected files
 
 ## Questions?
 

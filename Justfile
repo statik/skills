@@ -43,3 +43,36 @@ clean:
     rm -rf evals/__pycache__
     find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
     find . -type f -name "*.pyc" -delete 2>/dev/null || true
+
+# Create a new release
+# Usage: just release 1.0.0
+release version:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # Verify version matches SKILL.md metadata.version
+    SKILL_VERSION=$(grep -A1 '^metadata:' dns-troubleshooter/SKILL.md | grep 'version:' | sed 's/.*version: //')
+    if [ "$SKILL_VERSION" != "{{ version }}" ]; then
+        echo "Error: Version mismatch!"
+        echo "  SKILL.md metadata.version: $SKILL_VERSION"
+        echo "  Requested version: {{ version }}"
+        echo ""
+        echo "Update dns-troubleshooter/SKILL.md first:"
+        echo "  metadata:"
+        echo "    version: {{ version }}"
+        exit 1
+    fi
+
+    # Check for uncommitted changes
+    if ! git diff --quiet HEAD; then
+        echo "Error: You have uncommitted changes. Please commit first."
+        exit 1
+    fi
+
+    # Create and push tag
+    echo "Creating tag v{{ version }}..."
+    git tag -a "v{{ version }}" -m "Release dns-troubleshooter v{{ version }}"
+    git push origin "v{{ version }}"
+    echo ""
+    echo "Tag v{{ version }} pushed. GitHub Actions will create the release."
+    echo "Watch progress at: https://github.com/$(git remote get-url origin | sed 's/.*github.com[:/]//' | sed 's/.git$//')/actions"
