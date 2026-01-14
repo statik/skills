@@ -17,15 +17,11 @@ setup:
 validate:
     uvx --from skills-ref agentskills validate dns-troubleshooter
 
-# Run InspectAI evaluations with the default model
-evals model=anthropic_sonnet log_dir="" display="":
-    cd evals && uv run inspect eval dns_skill_eval.py --model {{ model }} {{ if log_dir != "" { "--log-dir " + log_dir } else { "" } }} {{ if display != "" { "--display " + display } else { "" } }}
-
-# Start the test DNS server (runs in foreground)
-dns-server:
-    cd evals && uv run python dns_server.py
-
-# Run evals (DNS server is started automatically by the eval code)
+# Run InspectAI evaluations
+# Usage: just test [model] [log_dir] [display]
+# Examples:
+#   just test                                    # uses defaults
+#   just test anthropic/claude-sonnet-4-5-20250514 ./logs none  # all args
 test model=anthropic_sonnet log_dir="" display="":
     cd evals && uv run inspect eval dns_skill_eval.py --model {{ model }} {{ if log_dir != "" { "--log-dir " + log_dir } else { "" } }} {{ if display != "" { "--display " + display } else { "" } }}
 
@@ -33,9 +29,9 @@ test model=anthropic_sonnet log_dir="" display="":
 test-bedrock log_dir="" display="":
     cd evals && uv run inspect eval dns_skill_eval.py --model {{ bedrock_sonnet }} {{ if log_dir != "" { "--log-dir " + log_dir } else { "" } }} {{ if display != "" { "--display " + display } else { "" } }}
 
-# Run evals for CI (uses Anthropic API with fixed settings)
-ci-evals:
-    cd evals && uv run inspect eval dns_skill_eval.py --model {{ anthropic_sonnet }} --log-dir ./logs --display none
+# Start the test DNS server (runs in foreground)
+dns-server:
+    cd evals && uv run python dns_server.py
 
 # Run quick validation (no evals, just structure checks)
 check: validate
