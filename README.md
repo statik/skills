@@ -83,6 +83,12 @@ Once installed, skills are automatically available to Claude. Simply ask Claude 
 
 Claude will use the skill's knowledge and workflows to help diagnose and resolve issues.
 
+## Evaluation Results
+
+Skills are evaluated using [InspectAI](https://inspect.aisi.org.uk/). View the latest evaluation results at:
+
+https://statik.github.io/skills/
+
 ## Contributing
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for information on creating your own skills, running evaluations, and development setup.

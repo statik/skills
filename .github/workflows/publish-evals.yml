@@ -90,6 +90,8 @@ jobs:
             --log-dir ./logs \
             --output-dir ../site \
             --overwrite
+          # Disable Jekyll processing
+          touch ../site/.nojekyll
 
       - name: Deploy to gh-pages
         run: |
