@@ -160,19 +160,10 @@ class TestDNSServer:
 
 
 if __name__ == "__main__":
-    # Quick test
-    zones = {
-        "example.test": {
-            "A": ["192.0.2.1"],
-            "TXT": ["v=spf1 ip4:192.0.2.0/24 -all"],
-            "NS": ["ns1.example.test."],
-        },
-        "ns1.example.test": {
-            "A": ["192.0.2.53"],
-        },
-    }
+    from test_zones import get_all_zones
 
-    print(f"Starting test DNS server on port 5053...")
+    zones = get_all_zones()
+    print("Starting test DNS server on port 5053...")
     with TestDNSServer(zones, port=5053) as server:
         print("Server running. Test with: dig @127.0.0.1 -p 5053 example.test A")
         print("Press Ctrl+C to stop.")
