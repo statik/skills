@@ -1,0 +1,67 @@
+name: Release Skills
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Releasing version: $VERSION"
+
+      - name: Verify version in SKILL.md matches tag
+        run: |
+          SKILL_VERSION=$(grep '^version:' dns-troubleshooter/SKILL.md | sed 's/version: //')
+          TAG_VERSION=${{ steps.version.outputs.version }}
+          if [ "$SKILL_VERSION" != "$TAG_VERSION" ]; then
+            echo "Error: Version mismatch!"
+            echo "  SKILL.md version: $SKILL_VERSION"
+            echo "  Git tag version: $TAG_VERSION"
+            echo "Please update dns-troubleshooter/SKILL.md to match the release tag."
+            exit 1
+          fi
+          echo "Version verified: $SKILL_VERSION"
+
+      - name: Create release zip
+        run: |
+          cd dns-troubleshooter
+          zip -r ../dns-troubleshooter-${{ steps.version.outputs.version }}.zip .
+          cd ..
+          echo "Created dns-troubleshooter-${{ steps.version.outputs.version }}.zip"
+          unzip -l dns-troubleshooter-${{ steps.version.outputs.version }}.zip
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: dns-troubleshooter v${{ steps.version.outputs.version }}
+          body: |
+            ## dns-troubleshooter v${{ steps.version.outputs.version }}
+
+            Download `dns-troubleshooter-${{ steps.version.outputs.version }}.zip` and extract it to your skills directory.
+
+            ### Installation
+
+            ```bash
+            # Download and extract to your Claude Code skills directory
+            curl -L https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}/dns-troubleshooter-${{ steps.version.outputs.version }}.zip -o dns-troubleshooter.zip
+            unzip dns-troubleshooter.zip -d ~/.claude/skills/dns-troubleshooter
+            ```
+
+            See the [README](https://github.com/${{ github.repository }}#readme) for usage instructions.
+          files: |
+            dns-troubleshooter-${{ steps.version.outputs.version }}.zip
+          draft: false
+          prerelease: false
