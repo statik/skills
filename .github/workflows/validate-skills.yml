@@ -137,6 +137,7 @@ jobs:
         run: |
           uv run python << 'PYTHON_SCRIPT'
           import json
+          import gzip
           import os
           from pathlib import Path
           from datetime import datetime
@@ -161,7 +162,7 @@ jobs:
               for item in log_dir.rglob("*"):
                   print(f"  {item}", flush=True)
 
-          # Look for .eval files (InspectAI log format)
+          # Look for .eval files (InspectAI log format - gzip compressed)
           log_files = list(log_dir.rglob("*.eval")) if log_dir.exists() else []
 
           # Also check for .json files as fallback
@@ -184,8 +185,13 @@ jobs:
 
           print(f"Reading log file: {log_file}", flush=True)
 
-          with open(log_file) as f:
-              log_data = json.load(f)
+          # .eval files are gzip compressed JSON
+          if log_file.suffix == ".eval":
+              with gzip.open(log_file, "rt", encoding="utf-8") as f:
+                  log_data = json.load(f)
+          else:
+              with open(log_file) as f:
+                  log_data = json.load(f)
 
           # Extract results
           results = log_data.get("results", {})
