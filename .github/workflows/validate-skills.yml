@@ -20,26 +20,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
+      - name: Install just
+        uses: extractions/setup-just@v2
 
-      - name: Install skills-ref
-        run: |
-          pip install skills-ref
-          echo "Installed to: $(pip show skills-ref | grep Location)"
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
 
-      - name: Find and validate skills
-        run: |
-          exit_code=0
-          for skill_dir in $(find . -name "SKILL.md" -exec dirname {} \; | sort -u); do
-            echo "Validating: $skill_dir"
-            if ! python -c "import sys; sys.argv = ['skills-ref', 'validate', '$skill_dir']; from skills_ref.cli import main; main()"; then
-              exit_code=1
-            fi
-          done
-          exit $exit_code
+      - name: Validate skills
+        run: just validate
 
   run-evals:
     runs-on: ubuntu-latest
@@ -48,6 +36,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install just
+        uses: extractions/setup-just@v2
+
       - name: Install uv
         uses: astral-sh/setup-uv@v5
 
@@ -55,8 +46,7 @@ jobs:
         run: uv python install 3.11
 
       - name: Install dependencies
-        working-directory: evals
-        run: uv sync
+        run: just setup
 
       - name: Check API key
         env:
@@ -72,64 +62,11 @@ jobs:
 
       - name: Run InspectAI evals
         if: env.SKIP_EVALS != 'true'
-        working-directory: evals
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          # Create log directory
-          mkdir -p logs
-
-          # Start DNS server in background and run evals
-          uv run python << 'PYTHON_SCRIPT'
-          import subprocess
-          import time
-          import os
-          import sys
-
-          from dns_server import TestDNSServer
-          from test_zones import get_all_zones
-
-          # Start DNS server
-          zones = get_all_zones()
-          server = TestDNSServer(zones, port=5053)
-          server.start()
-          time.sleep(0.5)
-          print("DNS server started on port 5053", flush=True)
-
-          try:
-              # Run the InspectAI eval with explicit log directory
-              cmd = [
-                  "uv", "run", "inspect", "eval", "dns_skill_eval.py",
-                  "--model", "anthropic/claude-sonnet-4-20250514",
-                  "--log-dir", "./logs",
-                  "--display", "none"
-              ]
-              print(f"Running: {' '.join(cmd)}", flush=True)
-
-              result = subprocess.run(cmd, timeout=600)
-              eval_exit_code = result.returncode
-          except subprocess.TimeoutExpired:
-              print("Eval timed out after 600 seconds", flush=True)
-              eval_exit_code = 1
-          except Exception as e:
-              print(f"Error running eval: {e}", flush=True)
-              eval_exit_code = 1
-          finally:
-              server.stop()
-              print("DNS server stopped", flush=True)
-
-          # List log files for debugging
-          import pathlib
-          log_dir = pathlib.Path("./logs")
-          if log_dir.exists():
-              print(f"Log files in {log_dir}:", flush=True)
-              for f in log_dir.rglob("*"):
-                  print(f"  {f}", flush=True)
-          else:
-              print("Log directory does not exist", flush=True)
-
-          sys.exit(eval_exit_code)
-          PYTHON_SCRIPT
+          mkdir -p evals/logs
+          just test anthropic/claude-sonnet-4-5-20250514 ./logs none
 
       - name: Parse and summarize eval results
         if: always()
