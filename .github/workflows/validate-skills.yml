@@ -34,6 +34,8 @@ jobs:
 
   test-dns-server:
     runs-on: ubuntu-latest
+    outputs:
+      results: ${{ steps.test.outputs.results }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -49,33 +51,118 @@ jobs:
         run: uv sync
 
       - name: Test DNS server
+        id: test
         working-directory: evals
         run: |
-          uv run python -c "
-          from dns_server import TestDNSServer
-          from test_zones import get_all_zones, TEST_DOMAIN
+          uv run python << 'PYTHON_SCRIPT'
           import subprocess
           import time
+          import json
+          import os
+
+          from dns_server import TestDNSServer
+          from test_zones import get_all_zones, TEST_DOMAIN, SCENARIOS
 
           zones = get_all_zones()
           server = TestDNSServer(zones, port=5053)
           server.start()
           time.sleep(0.5)
 
-          # Test SPF valid
-          result = subprocess.run(['dig', '@127.0.0.1', '-p', '5053', f'spf-valid.{TEST_DOMAIN}', 'TXT', '+short'], capture_output=True, text=True)
-          assert 'v=spf1' in result.stdout, f'SPF valid test failed: {result.stdout}'
+          results = []
+          all_passed = True
 
-          # Test SPF multiple (should return 2 records)
-          result = subprocess.run(['dig', '@127.0.0.1', '-p', '5053', f'spf-multiple.{TEST_DOMAIN}', 'TXT', '+short'], capture_output=True, text=True)
-          lines = [l for l in result.stdout.strip().split('\n') if l]
-          assert len(lines) == 2, f'SPF multiple test failed: expected 2 records, got {len(lines)}'
+          # Test each scenario
+          tests = [
+              ("spf-valid", "TXT", lambda out: "v=spf1" in out, "SPF record present"),
+              ("spf-multiple", "TXT", lambda out: len([l for l in out.strip().split('\n') if l]) == 2, "Returns 2 SPF records"),
+              ("spf-permissive", "TXT", lambda out: "+all" in out, "Contains +all"),
+              ("cname-conflict", "A", lambda out: "192.0.2.10" in out, "A record returned"),
+              ("cname-conflict", "CNAME", lambda out: "target.example.com" in out, "CNAME record returned"),
+              ("multi-a", "A", lambda out: len([l for l in out.strip().split('\n') if l]) == 3, "Returns 3 A records"),
+              ("duplicate-mx", "MX", lambda out: out.count("mail") >= 2, "Returns 2 MX records"),
+          ]
 
-          # Test multi-a (should return 3 records)
-          result = subprocess.run(['dig', '@127.0.0.1', '-p', '5053', f'multi-a.{TEST_DOMAIN}', 'A', '+short'], capture_output=True, text=True)
-          lines = [l for l in result.stdout.strip().split('\n') if l]
-          assert len(lines) == 3, f'Multi-A test failed: expected 3 records, got {len(lines)}'
+          for test_name, record_type, check_fn, description in tests:
+              domain = f"{test_name}.{TEST_DOMAIN}"
+              result = subprocess.run(
+                  ['dig', '@127.0.0.1', '-p', '5053', domain, record_type, '+short'],
+                  capture_output=True, text=True
+              )
+              passed = check_fn(result.stdout)
+              if not passed:
+                  all_passed = False
+              results.append({
+                  "test": f"{test_name} ({record_type})",
+                  "description": description,
+                  "passed": passed,
+                  "output": result.stdout.strip()[:100]
+              })
 
           server.stop()
-          print('All DNS server tests passed!')
-          "
+
+          # Write summary to file for later steps
+          with open("test_results.json", "w") as f:
+              json.dump({"passed": all_passed, "results": results}, f)
+
+          # Generate markdown summary
+          summary = "## DNS Server Test Results\n\n"
+          passed_count = sum(1 for r in results if r["passed"])
+          total_count = len(results)
+
+          if all_passed:
+              summary += f"**Status:** All {total_count} tests passed\n\n"
+          else:
+              summary += f"**Status:** {passed_count}/{total_count} tests passed\n\n"
+
+          summary += "| Test | Description | Status |\n"
+          summary += "|------|-------------|--------|\n"
+          for r in results:
+              status = "✅" if r["passed"] else "❌"
+              summary += f"| {r['test']} | {r['description']} | {status} |\n"
+
+          # Write to GitHub Actions summary
+          with open(os.environ.get("GITHUB_STEP_SUMMARY", "/dev/null"), "a") as f:
+              f.write(summary)
+
+          # Write summary to file for PR comment
+          with open("summary.md", "w") as f:
+              f.write(summary)
+
+          # Set output for other steps
+          print(f"passed={str(all_passed).lower()}")
+
+          if not all_passed:
+              print("\nFailed tests:")
+              for r in results:
+                  if not r["passed"]:
+                      print(f"  - {r['test']}: {r['output']}")
+              exit(1)
+
+          print(f"\nAll {total_count} tests passed!")
+          PYTHON_SCRIPT
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dns-test-results
+          path: |
+            evals/test_results.json
+            evals/summary.md
+
+      - name: Find existing comment
+        if: github.event_name == 'pull_request' && always()
+        uses: peter-evans/find-comment@v3
+        id: find-comment
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          body-includes: "## DNS Server Test Results"
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request' && always()
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          body-path: evals/summary.md
+          comment-id: ${{ steps.find-comment.outputs.comment-id }}
+          edit-mode: replace
