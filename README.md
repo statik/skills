@@ -6,7 +6,7 @@ A collection of skills that extend Claude's capabilities for specialized tasks.
 
 | Skill | Description |
 |-------|-------------|
-| [dns-troubleshooter](./dns-troubleshooter/) | Diagnose DNS issues including delegation verification, SPF validation, record conflicts, and authoritative vs local DNS comparison |
+| [dns-troubleshooter](./dns-troubleshooter/) | *It's not DNS / There's no way it's DNS / It was DNS.* Diagnose DNS issues including delegation verification, SPF validation, record conflicts, and authoritative vs local DNS comparison |
 
 ## Installation
 
