@@ -3,7 +3,7 @@
 
 # Model aliases for convenience
 anthropic_sonnet := "anthropic/claude-sonnet-4-5-20250514"
-bedrock_sonnet := "bedrock/anthropic.claude-sonnet-4-5-20250514-v1:0"
+bedrock_sonnet := "bedrock/us.anthropic.claude-sonnet-4-5-20250929-v1:0"
 
 # Default recipe - show available commands
 default:
@@ -25,22 +25,13 @@ evals model=anthropic_sonnet log_dir="" display="":
 dns-server:
     cd evals && uv run python dns_server.py
 
-# Run evals with test DNS server (starts server in background)
+# Run evals (DNS server is started automatically by the eval code)
 test model=anthropic_sonnet log_dir="" display="":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    cd evals
-    echo "Starting test DNS server on port 5053..."
-    uv run python dns_server.py &
-    DNS_PID=$!
-    trap "kill $DNS_PID 2>/dev/null || true" EXIT
-    sleep 2
-    echo "Running evaluations with model: {{ model }}"
-    uv run inspect eval dns_skill_eval.py --model {{ model }} {{ if log_dir != "" { "--log-dir " + log_dir } else { "" } }} {{ if display != "" { "--display " + display } else { "" } }}
+    cd evals && uv run inspect eval dns_skill_eval.py --model {{ model }} {{ if log_dir != "" { "--log-dir " + log_dir } else { "" } }} {{ if display != "" { "--display " + display } else { "" } }}
 
 # Run evals using AWS Bedrock (requires AWS credentials)
 test-bedrock log_dir="" display="":
-    just test model={{ bedrock_sonnet }} log_dir={{ log_dir }} display={{ display }}
+    cd evals && uv run inspect eval dns_skill_eval.py --model {{ bedrock_sonnet }} {{ if log_dir != "" { "--log-dir " + log_dir } else { "" } }} {{ if display != "" { "--display " + display } else { "" } }}
 
 # Run quick validation (no evals, just structure checks)
 check: validate
