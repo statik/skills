@@ -33,6 +33,10 @@ test model=anthropic_sonnet log_dir="" display="":
 test-bedrock log_dir="" display="":
     cd evals && uv run inspect eval dns_skill_eval.py --model {{ bedrock_sonnet }} {{ if log_dir != "" { "--log-dir " + log_dir } else { "" } }} {{ if display != "" { "--display " + display } else { "" } }}
 
+# Run evals for CI (uses Anthropic API with fixed settings)
+ci-evals:
+    cd evals && uv run inspect eval dns_skill_eval.py --model {{ anthropic_sonnet }} --log-dir ./logs --display none
+
 # Run quick validation (no evals, just structure checks)
 check: validate
     @echo "All validation checks passed!"
