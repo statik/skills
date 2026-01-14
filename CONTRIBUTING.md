@@ -45,6 +45,8 @@ Run `just` to see all available commands:
    ---
    name: my-skill
    description: What this skill does
+   metadata:
+     version: 1.0.0
    ---
 
    # My Skill
@@ -86,12 +88,13 @@ Skills are distributed as versioned zip files via GitHub Releases.
 
 1. **Update the version in SKILL.md**
 
-   Edit `dns-troubleshooter/SKILL.md` and update the `version` field in the frontmatter:
+   Edit `dns-troubleshooter/SKILL.md` and update the `metadata.version` field in the frontmatter:
    ```yaml
    ---
    name: dns-troubleshooter
-   version: 1.1.0  # bump this
    description: ...
+   metadata:
+     version: 1.1.0  # bump this
    ---
    ```
 

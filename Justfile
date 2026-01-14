@@ -50,15 +50,16 @@ release version:
     #!/usr/bin/env bash
     set -euo pipefail
 
-    # Verify version matches SKILL.md
-    SKILL_VERSION=$(grep '^version:' dns-troubleshooter/SKILL.md | sed 's/version: //')
+    # Verify version matches SKILL.md metadata.version
+    SKILL_VERSION=$(grep -A1 '^metadata:' dns-troubleshooter/SKILL.md | grep 'version:' | sed 's/.*version: //')
     if [ "$SKILL_VERSION" != "{{ version }}" ]; then
         echo "Error: Version mismatch!"
-        echo "  SKILL.md version: $SKILL_VERSION"
+        echo "  SKILL.md metadata.version: $SKILL_VERSION"
         echo "  Requested version: {{ version }}"
         echo ""
         echo "Update dns-troubleshooter/SKILL.md first:"
-        echo "  version: {{ version }}"
+        echo "  metadata:"
+        echo "    version: {{ version }}"
         exit 1
     fi
 

@@ -24,13 +24,14 @@ jobs:
 
       - name: Verify version in SKILL.md matches tag
         run: |
-          SKILL_VERSION=$(grep '^version:' dns-troubleshooter/SKILL.md | sed 's/version: //')
+          # Extract version from metadata.version in YAML frontmatter
+          SKILL_VERSION=$(grep -A1 '^metadata:' dns-troubleshooter/SKILL.md | grep 'version:' | sed 's/.*version: //')
           TAG_VERSION=${{ steps.version.outputs.version }}
           if [ "$SKILL_VERSION" != "$TAG_VERSION" ]; then
             echo "Error: Version mismatch!"
-            echo "  SKILL.md version: $SKILL_VERSION"
+            echo "  SKILL.md metadata.version: $SKILL_VERSION"
             echo "  Git tag version: $TAG_VERSION"
-            echo "Please update dns-troubleshooter/SKILL.md to match the release tag."
+            echo "Please update dns-troubleshooter/SKILL.md metadata.version to match the release tag."
             exit 1
           fi
           echo "Version verified: $SKILL_VERSION"
