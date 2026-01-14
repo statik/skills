@@ -6,6 +6,10 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   validate:
     runs-on: ubuntu-latest
@@ -26,7 +30,7 @@ jobs:
           exit_code=0
           for skill_dir in $(find . -name "SKILL.md" -exec dirname {} \; | sort -u); do
             echo "Validating: $skill_dir"
-            if ! skills-ref validate "$skill_dir"; then
+            if ! python -m skills_ref validate "$skill_dir"; then
               exit_code=1
             fi
           done
