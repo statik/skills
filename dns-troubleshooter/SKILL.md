@@ -7,17 +7,49 @@ description: Diagnose and troubleshoot DNS issues including delegation verificat
 
 ## Tool Detection
 
-First, check for doggo (modern DNS client with useful output):
+First, check for doggo (modern DNS client with cleaner output):
 
 ```bash
 command -v doggo
 ```
 
-If available, prefer doggo for queries. If not, suggest installation from https://github.com/mr-karan/doggo and fall back to standard tools.
+If available, prefer doggo for queries. If not, offer to install it or fall back to standard tools.
 
 **Standard tools by platform:**
 - macOS/Linux: `dig`, `host`, `nslookup`
 - Windows: `nslookup`, `Resolve-DnsName` (PowerShell)
+
+## Installing Doggo
+
+If the user wants doggo installed, detect their platform and use the appropriate method:
+
+**Quick install (Linux/macOS):**
+```bash
+curl -fsSL https://raw.githubusercontent.com/mr-karan/doggo/main/install.sh | sh
+```
+
+**Package managers:**
+
+| Platform | Command |
+|----------|---------|
+| macOS (Homebrew) | `brew install doggo` |
+| macOS (MacPorts) | `port install doggo` |
+| Arch Linux (AUR) | `yay -S doggo-bin` |
+| Nix | `nix profile install nixpkgs#doggo` |
+| Windows (Scoop) | `scoop install doggo` |
+| Windows (Winget) | `winget install doggo` |
+
+**Go install:**
+```bash
+go install github.com/mr-karan/doggo/cmd/doggo@latest
+```
+
+**Docker (no install needed):**
+```bash
+docker run --rm ghcr.io/mr-karan/doggo:latest example.com
+```
+
+After installation, verify with `doggo --version`.
 
 ## Workflow Decision Tree
 
