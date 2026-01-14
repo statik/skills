@@ -1,0 +1,33 @@
+name: Validate Skills
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install skills-ref
+        run: pip install skills-ref
+
+      - name: Find and validate skills
+        run: |
+          exit_code=0
+          for skill_dir in $(find . -name "SKILL.md" -exec dirname {} \; | sort -u); do
+            echo "Validating: $skill_dir"
+            if ! skills-ref validate "$skill_dir"; then
+              exit_code=1
+            fi
+          done
+          exit $exit_code
