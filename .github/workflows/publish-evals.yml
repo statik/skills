@@ -1,0 +1,103 @@
+name: Publish Eval Results
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+env:
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  publish-evals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install just
+        uses: extractions/setup-just@v2
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install dependencies
+        run: just setup
+
+      - name: Check API key
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "::error::ANTHROPIC_API_KEY secret is not set. Cannot run evals."
+            exit 1
+          fi
+
+      - name: Fetch previous logs from gh-pages
+        run: |
+          mkdir -p evals/logs
+          # Check if gh-pages branch exists
+          if git ls-remote --heads origin gh-pages | grep -q gh-pages; then
+            echo "Fetching previous logs from gh-pages branch..."
+            git fetch origin gh-pages
+            # Extract logs from gh-pages branch if they exist
+            if git show origin/gh-pages:logs 2>/dev/null; then
+              git checkout origin/gh-pages -- logs/ 2>/dev/null || true
+              if [ -d "logs" ]; then
+                mv logs/* evals/logs/ 2>/dev/null || true
+                rm -rf logs
+              fi
+            fi
+            echo "Found $(ls -1 evals/logs/*.eval 2>/dev/null | wc -l) previous log files"
+          else
+            echo "No gh-pages branch yet, starting fresh"
+          fi
+
+      - name: Run InspectAI evals
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          just test anthropic/claude-sonnet-4-5-20250929 ./logs none
+
+      - name: Retain last 100 logs
+        working-directory: evals/logs
+        run: |
+          # Count .eval files
+          count=$(ls -1 *.eval 2>/dev/null | wc -l)
+          echo "Total log files: $count"
+
+          if [ "$count" -gt 100 ]; then
+            # Sort by modification time, keep newest 100
+            ls -1t *.eval | tail -n +101 | xargs rm -f
+            echo "Pruned to 100 log files"
+          fi
+
+      - name: Generate static HTML bundle
+        run: |
+          cd evals
+          uv run inspect view bundle \
+            --log-dir ./logs \
+            --output-dir ../site \
+            --overwrite
+
+      - name: Deploy to gh-pages
+        run: |
+          cd site
+          git init
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b gh-pages
+          git add -A
+          git commit -m "Update eval results - $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
+          git push -f https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git gh-pages
