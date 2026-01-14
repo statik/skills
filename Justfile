@@ -2,7 +2,7 @@
 # https://github.com/casey/just
 
 # Model aliases for convenience
-anthropic_sonnet := "anthropic/claude-sonnet-4-5-20250514"
+anthropic_sonnet := "anthropic/claude-sonnet-4-5-20250929"
 bedrock_sonnet := "bedrock/us.anthropic.claude-sonnet-4-5-20250929-v1:0"
 
 # Default recipe - show available commands
@@ -21,7 +21,7 @@ validate:
 # Usage: just test [model] [log_dir] [display]
 # Examples:
 #   just test                                    # uses defaults
-#   just test anthropic/claude-sonnet-4-5-20250514 ./logs none  # all args
+#   just test anthropic/claude-sonnet-4-5-20250929 ./logs none  # all args
 test model=anthropic_sonnet log_dir="" display="":
     cd evals && uv run inspect eval dns_skill_eval.py --model {{ model }} {{ if log_dir != "" { "--log-dir " + log_dir } else { "" } }} {{ if display != "" { "--display " + display } else { "" } }}
 
