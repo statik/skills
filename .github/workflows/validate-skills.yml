@@ -185,40 +185,49 @@ jobs:
 
           print(f"Reading log file: {log_file}", flush=True)
 
-          # .eval files are ZIP archives containing JSON
+          # .eval files are ZIP archives with header.json and summaries.json
           if log_file.suffix == ".eval":
               with zipfile.ZipFile(log_file, "r") as zf:
-                  # Find the JSON file inside the archive
-                  json_files = [n for n in zf.namelist() if n.endswith(".json")]
-                  if json_files:
-                      with zf.open(json_files[0]) as f:
-                          log_data = json.load(f)
-                  else:
-                      raise ValueError(f"No JSON file found in {log_file}")
+                  # Read header for status
+                  with zf.open("header.json") as f:
+                      header = json.load(f)
+                  # Read summaries for sample results
+                  with zf.open("summaries.json") as f:
+                      samples = json.load(f)
+                  status = header.get("status", "unknown")
+                  error = header.get("error", None)
           else:
               with open(log_file) as f:
                   log_data = json.load(f)
-
-          # Extract results
-          results = log_data.get("results", {})
-          samples = log_data.get("samples", [])
-          status = log_data.get("status", "unknown")
-          error = log_data.get("error", None)
+              samples = log_data.get("samples", [])
+              status = log_data.get("status", "unknown")
+              error = log_data.get("error", None)
 
           total = len(samples)
           correct = sum(1 for s in samples if s.get("scores", {}).get("model_graded_fact", {}).get("value") == "C")
           incorrect = sum(1 for s in samples if s.get("scores", {}).get("model_graded_fact", {}).get("value") == "I")
+          errored = sum(1 for s in samples if s.get("error"))
 
           # Build summary
           summary = "## DNS Troubleshooter Eval Results\n\n"
 
-          if error:
-              summary += f"**Status:** Error - {error.get('message', 'Unknown error')}\n\n"
-          elif total > 0:
+          # Check for sample-level errors (e.g., API auth failures)
+          sample_errors = [s.get("error") for s in samples if s.get("error")]
+          if sample_errors:
+              first_error = sample_errors[0]
+              if "401" in str(first_error) or "authentication" in str(first_error).lower():
+                  summary += "**Status:** Authentication Error\n\n"
+                  summary += "The `ANTHROPIC_API_KEY` secret appears to be invalid or expired.\n\n"
+              else:
+                  summary += f"**Status:** Error - {first_error[:200]}\n\n"
+          elif error:
+              error_msg = error.get('message', str(error)) if isinstance(error, dict) else str(error)
+              summary += f"**Status:** Error - {error_msg}\n\n"
+          elif total > 0 and correct + incorrect > 0:
               pct = (correct / total) * 100
               summary += f"**Score:** {correct}/{total} ({pct:.1f}%)\n\n"
           else:
-              summary += f"**Status:** {status} - No samples evaluated\n\n"
+              summary += f"**Status:** {status}\n\n"
 
           if samples:
               summary += "| Sample | Category | Expected | Result |\n"
@@ -230,15 +239,20 @@ jobs:
                   category = metadata.get("category", "unknown")
                   expected = metadata.get("expected_diagnosis", "unknown")
 
-                  score = sample.get("scores", {}).get("model_graded_fact", {})
-                  value = score.get("value", "?")
-
-                  if value == "C":
-                      result_icon = "✅"
-                  elif value == "I":
-                      result_icon = "❌"
+                  # Check for sample error first
+                  sample_error = sample.get("error")
+                  if sample_error:
+                      result_icon = "🔴 Error"
                   else:
-                      result_icon = "⚠️"
+                      score = sample.get("scores", {}).get("model_graded_fact", {})
+                      value = score.get("value", "?")
+
+                      if value == "C":
+                          result_icon = "✅"
+                      elif value == "I":
+                          result_icon = "❌"
+                      else:
+                          result_icon = "⚠️"
 
                   summary += f"| {sample_id} | {category} | {expected} | {result_icon} |\n"
 
