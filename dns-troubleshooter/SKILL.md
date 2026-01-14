@@ -1,9 +1,13 @@
 ---
 name: dns-troubleshooter
-description: Diagnose and troubleshoot DNS issues including delegation verification, record conflicts, authoritative vs local DNS comparison, and SPF validation. Use when encountering NXDOMAIN errors for URLs that should exist, verifying DNS delegation is correct, checking for conflicting DNS records, comparing what authoritative nameservers say vs local resolvers, or validating SPF records for email deliverability.
+description: "It's not DNS / There's no way it's DNS / It was DNS. Diagnose and troubleshoot DNS issues including delegation verification, record conflicts, authoritative vs local DNS comparison, and SPF validation. Use when encountering NXDOMAIN errors for URLs that should exist, verifying DNS delegation is correct, checking for conflicting DNS records, comparing what authoritative nameservers say vs local resolvers, or validating SPF records for email deliverability."
 ---
 
 # DNS Troubleshooter
+
+> *It's not DNS*
+> *There's no way it's DNS*
+> *It was DNS*
 
 ## Tool Detection
 

@@ -6,6 +6,13 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  PYTHONUNBUFFERED: "1"
+
 jobs:
   validate:
     runs-on: ubuntu-latest
@@ -19,14 +26,16 @@ jobs:
           python-version: "3.11"
 
       - name: Install skills-ref
-        run: pip install skills-ref
+        run: |
+          pip install skills-ref
+          echo "Installed to: $(pip show skills-ref | grep Location)"
 
       - name: Find and validate skills
         run: |
           exit_code=0
           for skill_dir in $(find . -name "SKILL.md" -exec dirname {} \; | sort -u); do
             echo "Validating: $skill_dir"
-            if ! skills-ref validate "$skill_dir"; then
+            if ! python -c "import sys; sys.argv = ['skills-ref', 'validate', '$skill_dir']; from skills_ref.cli import main; main()"; then
               exit_code=1
             fi
           done
@@ -34,6 +43,7 @@ jobs:
 
   run-evals:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -48,19 +58,33 @@ jobs:
         working-directory: evals
         run: uv sync
 
+      - name: Check API key
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "::warning::ANTHROPIC_API_KEY secret is not set. Evals will be skipped."
+            echo "SKIP_EVALS=true" >> $GITHUB_ENV
+          else
+            echo "ANTHROPIC_API_KEY is configured"
+            echo "SKIP_EVALS=false" >> $GITHUB_ENV
+          fi
+
       - name: Run InspectAI evals
+        if: env.SKIP_EVALS != 'true'
         working-directory: evals
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
+          # Create log directory
+          mkdir -p logs
+
           # Start DNS server in background and run evals
           uv run python << 'PYTHON_SCRIPT'
           import subprocess
           import time
-          import json
           import os
           import sys
-          from pathlib import Path
 
           from dns_server import TestDNSServer
           from test_zones import get_all_zones
@@ -70,24 +94,39 @@ jobs:
           server = TestDNSServer(zones, port=5053)
           server.start()
           time.sleep(0.5)
-          print("DNS server started on port 5053")
+          print("DNS server started on port 5053", flush=True)
 
           try:
-              # Run the InspectAI eval
-              result = subprocess.run(
-                  ["uv", "run", "inspect", "eval", "dns_skill_eval.py", "--model", "anthropic/claude-sonnet-4-20250514"],
-                  capture_output=True,
-                  text=True,
-                  timeout=600
-              )
-              print(result.stdout)
-              if result.stderr:
-                  print(result.stderr, file=sys.stderr)
+              # Run the InspectAI eval with explicit log directory
+              cmd = [
+                  "uv", "run", "inspect", "eval", "dns_skill_eval.py",
+                  "--model", "anthropic/claude-sonnet-4-20250514",
+                  "--log-dir", "./logs",
+                  "--display", "none"
+              ]
+              print(f"Running: {' '.join(cmd)}", flush=True)
 
+              result = subprocess.run(cmd, timeout=600)
               eval_exit_code = result.returncode
+          except subprocess.TimeoutExpired:
+              print("Eval timed out after 600 seconds", flush=True)
+              eval_exit_code = 1
+          except Exception as e:
+              print(f"Error running eval: {e}", flush=True)
+              eval_exit_code = 1
           finally:
               server.stop()
-              print("DNS server stopped")
+              print("DNS server stopped", flush=True)
+
+          # List log files for debugging
+          import pathlib
+          log_dir = pathlib.Path("./logs")
+          if log_dir.exists():
+              print(f"Log files in {log_dir}:", flush=True)
+              for f in log_dir.rglob("*"):
+                  print(f"  {f}", flush=True)
+          else:
+              print("Log directory does not exist", flush=True)
 
           sys.exit(eval_exit_code)
           PYTHON_SCRIPT
@@ -98,20 +137,42 @@ jobs:
         run: |
           uv run python << 'PYTHON_SCRIPT'
           import json
+          import zipfile
           import os
           from pathlib import Path
           from datetime import datetime
 
-          # Find the most recent log file
-          log_dir = Path(".inspect")
-          if not log_dir.exists():
-              log_dir = Path.home() / ".inspect" / "logs"
+          # Check if evals were skipped
+          if os.environ.get("SKIP_EVALS") == "true":
+              summary = "## DNS Troubleshooter Eval Results\n\n"
+              summary += "**Status:** Skipped (ANTHROPIC_API_KEY not configured)\n\n"
+              summary += "To run evals, add the `ANTHROPIC_API_KEY` secret to this repository.\n"
+              with open(os.environ.get("GITHUB_STEP_SUMMARY", "summary.md"), "a") as f:
+                  f.write(summary)
+              with open("summary.md", "w") as f:
+                  f.write(summary)
+              exit(0)
 
-          log_files = list(log_dir.rglob("*.json")) if log_dir.exists() else []
+          # Find log files in the explicit log directory
+          log_dir = Path("./logs")
+          print(f"Looking for logs in: {log_dir.absolute()}", flush=True)
+
+          if log_dir.exists():
+              print(f"Contents of {log_dir}:", flush=True)
+              for item in log_dir.rglob("*"):
+                  print(f"  {item}", flush=True)
+
+          # Look for .eval files (InspectAI log format - ZIP archives)
+          log_files = list(log_dir.rglob("*.eval")) if log_dir.exists() else []
+
+          # Also check for .json files as fallback
+          if not log_files:
+              log_files = list(log_dir.rglob("*.json")) if log_dir.exists() else []
 
           if not log_files:
               summary = "## DNS Troubleshooter Eval Results\n\n"
-              summary += "**Status:** No eval logs found\n"
+              summary += "**Status:** No eval logs found\n\n"
+              summary += "Check the workflow logs for errors during eval execution.\n"
               with open(os.environ.get("GITHUB_STEP_SUMMARY", "summary.md"), "a") as f:
                   f.write(summary)
               with open("summary.md", "w") as f:
@@ -122,48 +183,78 @@ jobs:
           log_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
           log_file = log_files[0]
 
-          print(f"Reading log file: {log_file}")
+          print(f"Reading log file: {log_file}", flush=True)
 
-          with open(log_file) as f:
-              log_data = json.load(f)
-
-          # Extract results
-          results = log_data.get("results", {})
-          samples = log_data.get("samples", [])
+          # .eval files are ZIP archives with header.json and summaries.json
+          if log_file.suffix == ".eval":
+              with zipfile.ZipFile(log_file, "r") as zf:
+                  # Read header for status
+                  with zf.open("header.json") as f:
+                      header = json.load(f)
+                  # Read summaries for sample results
+                  with zf.open("summaries.json") as f:
+                      samples = json.load(f)
+                  status = header.get("status", "unknown")
+                  error = header.get("error", None)
+          else:
+              with open(log_file) as f:
+                  log_data = json.load(f)
+              samples = log_data.get("samples", [])
+              status = log_data.get("status", "unknown")
+              error = log_data.get("error", None)
 
           total = len(samples)
           correct = sum(1 for s in samples if s.get("scores", {}).get("model_graded_fact", {}).get("value") == "C")
           incorrect = sum(1 for s in samples if s.get("scores", {}).get("model_graded_fact", {}).get("value") == "I")
+          errored = sum(1 for s in samples if s.get("error"))
 
           # Build summary
           summary = "## DNS Troubleshooter Eval Results\n\n"
 
-          if total > 0:
+          # Check for sample-level errors (e.g., API auth failures)
+          sample_errors = [s.get("error") for s in samples if s.get("error")]
+          if sample_errors:
+              first_error = sample_errors[0]
+              if "401" in str(first_error) or "authentication" in str(first_error).lower():
+                  summary += "**Status:** Authentication Error\n\n"
+                  summary += "The `ANTHROPIC_API_KEY` secret appears to be invalid or expired.\n\n"
+              else:
+                  summary += f"**Status:** Error - {first_error[:200]}\n\n"
+          elif error:
+              error_msg = error.get('message', str(error)) if isinstance(error, dict) else str(error)
+              summary += f"**Status:** Error - {error_msg}\n\n"
+          elif total > 0 and correct + incorrect > 0:
               pct = (correct / total) * 100
               summary += f"**Score:** {correct}/{total} ({pct:.1f}%)\n\n"
           else:
-              summary += "**Score:** No samples evaluated\n\n"
+              summary += f"**Status:** {status}\n\n"
 
-          summary += "| Sample | Category | Expected | Result |\n"
-          summary += "|--------|----------|----------|--------|\n"
+          if samples:
+              summary += "| Sample | Category | Expected | Result |\n"
+              summary += "|--------|----------|----------|--------|\n"
 
-          for sample in samples:
-              sample_id = sample.get("id", "unknown")
-              metadata = sample.get("metadata", {})
-              category = metadata.get("category", "unknown")
-              expected = metadata.get("expected_diagnosis", "unknown")
+              for sample in samples:
+                  sample_id = sample.get("id", "unknown")
+                  metadata = sample.get("metadata", {})
+                  category = metadata.get("category", "unknown")
+                  expected = metadata.get("expected_diagnosis", "unknown")
 
-              score = sample.get("scores", {}).get("model_graded_fact", {})
-              value = score.get("value", "?")
+                  # Check for sample error first
+                  sample_error = sample.get("error")
+                  if sample_error:
+                      result_icon = "🔴 Error"
+                  else:
+                      score = sample.get("scores", {}).get("model_graded_fact", {})
+                      value = score.get("value", "?")
 
-              if value == "C":
-                  result_icon = "✅"
-              elif value == "I":
-                  result_icon = "❌"
-              else:
-                  result_icon = "⚠️"
+                      if value == "C":
+                          result_icon = "✅"
+                      elif value == "I":
+                          result_icon = "❌"
+                      else:
+                          result_icon = "⚠️"
 
-              summary += f"| {sample_id} | {category} | {expected} | {result_icon} |\n"
+                  summary += f"| {sample_id} | {category} | {expected} | {result_icon} |\n"
 
           summary += f"\n*Eval run: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*\n"
 
@@ -175,7 +266,7 @@ jobs:
           with open("summary.md", "w") as f:
               f.write(summary)
 
-          print(summary)
+          print(summary, flush=True)
           PYTHON_SCRIPT
 
       - name: Upload eval logs
@@ -184,7 +275,7 @@ jobs:
         with:
           name: inspect-eval-logs
           path: |
-            evals/.inspect/
+            evals/logs/
             evals/summary.md
           if-no-files-found: ignore
 
