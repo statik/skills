@@ -83,53 +83,9 @@ Once installed, skills are automatically available to Claude. Simply ask Claude 
 
 Claude will use the skill's knowledge and workflows to help diagnose and resolve issues.
 
-## Creating Your Own Skills
+## Contributing
 
-Each skill is a directory containing:
-
-```
-my-skill/
-├── SKILL.md          # Required: Instructions and metadata
-├── scripts/          # Optional: Executable scripts
-├── references/       # Optional: Reference documentation
-└── assets/           # Optional: Templates, images, etc.
-```
-
-The `SKILL.md` file must include YAML frontmatter with `name` and `description` fields:
-
-```yaml
----
-name: my-skill
-description: What this skill does and when to use it.
----
-
-# My Skill
-
-Instructions for Claude on how to use this skill...
-```
-
-See the [Agent Skills Specification](https://agentskills.io) for detailed documentation.
-
-## Development
-
-### Running Evals
-
-This repository includes an InspectAI evaluation suite for testing skill performance:
-
-```bash
-cd evals
-uv sync
-uv run inspect eval dns_skill_eval.py --model anthropic/claude-sonnet-4-20250514
-```
-
-### Validating Skills
-
-Skills can be validated using the `skills-ref` tool:
-
-```bash
-pip install skills-ref
-skills-ref validate dns-troubleshooter
-```
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for information on creating your own skills, running evaluations, and development setup.
 
 ## License
 

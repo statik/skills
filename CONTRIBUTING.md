@@ -37,22 +37,41 @@ Run `just` to see all available commands:
 | `just release <version>` | Create a new release |
 | `just clean` | Remove generated files |
 
-## Adding a New Skill
+## Creating a New Skill
+
+Each skill is a directory containing:
+
+```
+my-skill/
+├── SKILL.md          # Required: Instructions and metadata
+├── scripts/          # Optional: Executable scripts
+├── references/       # Optional: Reference documentation
+└── assets/           # Optional: Templates, images, etc.
+```
+
+### SKILL.md Structure
+
+The `SKILL.md` file must include YAML frontmatter with `name` and `description` fields:
+
+```yaml
+---
+name: my-skill
+description: What this skill does and when to use it.
+metadata:
+  version: 1.0.0
+---
+
+# My Skill
+
+Instructions for Claude on how to use this skill...
+```
+
+See the [Agent Skills Specification](https://agentskills.io) for detailed documentation.
+
+### Steps to Add a Skill
 
 1. Create a directory with your skill name
-2. Add a `SKILL.md` file with YAML frontmatter:
-   ```yaml
-   ---
-   name: my-skill
-   description: What this skill does
-   metadata:
-     version: 1.0.0
-   ---
-
-   # My Skill
-
-   Instructions for Claude...
-   ```
+2. Add a `SKILL.md` file with the required frontmatter
 3. Optionally add `references/`, `scripts/`, or `assets/` directories
 4. Run `just validate` to check your skill
 5. Submit a pull request
