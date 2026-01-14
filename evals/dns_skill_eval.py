@@ -1,23 +1,26 @@
 """
 InspectAI eval for dns-troubleshooter skill.
 
-Tests the skill's ability to diagnose DNS issues using a local test DNS server.
+Tests the skill by running Claude Code CLI with the skill installed,
+using a local test DNS server for queries.
 """
 
+import asyncio
+import json
 import os
+import shutil
+import subprocess
+import tempfile
 from pathlib import Path
 
 from inspect_ai import Task, task
 from inspect_ai.dataset import Sample, MemoryDataset
+from inspect_ai.model import ModelOutput, ChatMessageAssistant
 from inspect_ai.scorer import model_graded_fact
-from inspect_ai.solver import generate, system_message, use_tools
-from inspect_ai.tool import bash
+from inspect_ai.solver import Solver, TaskState, solver
 
 from dns_server import TestDNSServer
 from test_zones import get_all_zones, SCENARIOS, TEST_DOMAIN
-
-# Timeout for bash commands (seconds)
-CMD_TIMEOUT = 30
 
 # Port for the test DNS server
 DNS_PORT = int(os.environ.get("DNS_TEST_PORT", "5053"))
@@ -25,42 +28,146 @@ DNS_PORT = int(os.environ.get("DNS_TEST_PORT", "5053"))
 # Path to the skill
 SKILL_PATH = Path(__file__).parent.parent / "dns-troubleshooter"
 
+# Timeout for Claude Code execution (seconds)
+CLAUDE_TIMEOUT = 120
 
-def get_skill_content() -> str:
-    """Load the dns-troubleshooter skill content including references."""
-    content_parts = []
-
-    # Load main SKILL.md
-    skill_md = SKILL_PATH / "SKILL.md"
-    if skill_md.exists():
-        content_parts.append(skill_md.read_text())
-
-    # Load SPF reference
-    spf_ref = SKILL_PATH / "references" / "spf.md"
-    if spf_ref.exists():
-        content_parts.append("\n\n## SPF Reference\n\n" + spf_ref.read_text())
-
-    return "\n".join(content_parts)
+# Global server instance for the eval
+_server: TestDNSServer | None = None
 
 
-def make_system_prompt() -> str:
-    """Create system prompt with skill instructions."""
-    skill_content = get_skill_content()
+def start_dns_server():
+    """Start the test DNS server."""
+    global _server
+    if _server is None:
+        zones = get_all_zones()
+        _server = TestDNSServer(zones, port=DNS_PORT)
+        _server.start()
 
-    return f"""You are a DNS troubleshooting expert. You have access to DNS diagnostic tools.
 
-IMPORTANT: For all DNS queries in this evaluation, use the test DNS server at 127.0.0.1 port {DNS_PORT}.
+def stop_dns_server():
+    """Stop the test DNS server."""
+    global _server
+    if _server is not None:
+        _server.stop()
+        _server = None
+
+
+def setup_skill_directory(work_dir: Path) -> None:
+    """Set up the skill in the working directory's .claude/skills folder."""
+    skills_dir = work_dir / ".claude" / "skills"
+    skills_dir.mkdir(parents=True, exist_ok=True)
+
+    # Copy the skill to the working directory
+    dest = skills_dir / "dns-troubleshooter"
+    if dest.exists():
+        shutil.rmtree(dest)
+    shutil.copytree(SKILL_PATH, dest)
+
+
+def run_claude_code(prompt: str, work_dir: Path, model: str | None = None) -> str:
+    """Run Claude Code CLI with the given prompt and return the response."""
+    # Build the command
+    cmd = [
+        "claude",
+        "--print",
+        "--dangerously-skip-permissions",
+        "--output-format", "json",
+    ]
+
+    if model:
+        cmd.extend(["--model", model])
+
+    # Add the prompt
+    cmd.append(prompt)
+
+    # Run Claude Code
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=work_dir,
+            capture_output=True,
+            text=True,
+            timeout=CLAUDE_TIMEOUT,
+            env={**os.environ, "ANTHROPIC_API_KEY": os.environ.get("ANTHROPIC_API_KEY", "")},
+        )
+
+        if result.returncode != 0:
+            return f"Error running Claude Code: {result.stderr}"
+
+        # Parse JSON output to extract the response
+        try:
+            output = json.loads(result.stdout)
+            # The JSON output contains the conversation - extract the last assistant message
+            if isinstance(output, dict) and "result" in output:
+                return output["result"]
+            elif isinstance(output, list):
+                # Find the last assistant message
+                for msg in reversed(output):
+                    if msg.get("type") == "assistant":
+                        content = msg.get("content", [])
+                        text_parts = [c.get("text", "") for c in content if c.get("type") == "text"]
+                        return "\n".join(text_parts)
+            return result.stdout
+        except json.JSONDecodeError:
+            return result.stdout
+
+    except subprocess.TimeoutExpired:
+        return f"Error: Claude Code timed out after {CLAUDE_TIMEOUT} seconds"
+    except Exception as e:
+        return f"Error running Claude Code: {str(e)}"
+
+
+@solver
+def claude_code_solver(model: str | None = None) -> Solver:
+    """
+    Solver that runs Claude Code CLI with the dns-troubleshooter skill.
+
+    This executes the actual Claude Code CLI rather than directly invoking the model,
+    testing the skill as it would be used in practice.
+    """
+
+    async def solve(state: TaskState, generate) -> TaskState:
+        # Create a temporary working directory
+        with tempfile.TemporaryDirectory() as temp_dir:
+            work_dir = Path(temp_dir)
+
+            # Set up the skill in the working directory
+            setup_skill_directory(work_dir)
+
+            # Get the user's input prompt
+            user_input = state.input_text
+
+            # Add context about the test DNS server
+            full_prompt = f"""{user_input}
+
+IMPORTANT: For all DNS queries, use the test DNS server at 127.0.0.1 port {DNS_PORT}.
 Use dig with: dig @127.0.0.1 -p {DNS_PORT} <domain> <record_type>
-Or with doggo: doggo <domain> @127.0.0.1:{DNS_PORT}
-
-{skill_content}
 
 When analyzing DNS records, provide:
 1. Your finding
 2. The command you used to verify
 3. Your diagnosis (valid, invalid, warning, insecure, incomplete)
-4. Explanation of the issue if any
-"""
+4. Explanation of the issue if any"""
+
+            # Run Claude Code and get the response
+            response = await asyncio.to_thread(
+                run_claude_code, full_prompt, work_dir, model
+            )
+
+            # Create the model output
+            state.output = ModelOutput.from_content(
+                model="claude-code",
+                content=response,
+            )
+
+            # Add assistant message to the conversation
+            state.messages.append(
+                ChatMessageAssistant(content=response)
+            )
+
+        return state
+
+    return solve
 
 
 def create_spf_samples() -> list[Sample]:
@@ -125,30 +232,9 @@ def create_all_samples() -> list[Sample]:
     return samples
 
 
-# Global server instance for the eval
-_server: TestDNSServer | None = None
-
-
-def start_dns_server():
-    """Start the test DNS server."""
-    global _server
-    if _server is None:
-        zones = get_all_zones()
-        _server = TestDNSServer(zones, port=DNS_PORT)
-        _server.start()
-
-
-def stop_dns_server():
-    """Stop the test DNS server."""
-    global _server
-    if _server is not None:
-        _server.stop()
-        _server = None
-
-
 @task
 def dns_troubleshooter_eval() -> Task:
-    """Main evaluation task for dns-troubleshooter skill."""
+    """Main evaluation task for dns-troubleshooter skill using Claude Code CLI."""
     # Start the DNS server
     start_dns_server()
 
@@ -158,18 +244,15 @@ def dns_troubleshooter_eval() -> Task:
     return Task(
         dataset=dataset,
         solver=[
-            system_message(make_system_prompt()),
-            use_tools([bash(CMD_TIMEOUT)]),
-            generate(),
+            claude_code_solver(),
         ],
         scorer=model_graded_fact(),
-        sandbox="local",
     )
 
 
 @task
 def dns_spf_eval() -> Task:
-    """SPF-focused evaluation task."""
+    """SPF-focused evaluation task using Claude Code CLI."""
     start_dns_server()
 
     samples = create_spf_samples()
@@ -178,18 +261,15 @@ def dns_spf_eval() -> Task:
     return Task(
         dataset=dataset,
         solver=[
-            system_message(make_system_prompt()),
-            use_tools([bash(CMD_TIMEOUT)]),
-            generate(),
+            claude_code_solver(),
         ],
         scorer=model_graded_fact(),
-        sandbox="local",
     )
 
 
 @task
 def dns_conflict_eval() -> Task:
-    """Record conflict evaluation task."""
+    """Record conflict evaluation task using Claude Code CLI."""
     start_dns_server()
 
     samples = create_conflict_samples()
@@ -198,12 +278,9 @@ def dns_conflict_eval() -> Task:
     return Task(
         dataset=dataset,
         solver=[
-            system_message(make_system_prompt()),
-            use_tools([bash(CMD_TIMEOUT)]),
-            generate(),
+            claude_code_solver(),
         ],
         scorer=model_graded_fact(),
-        sandbox="local",
     )
 
 
