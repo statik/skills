@@ -68,7 +68,7 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          just test anthropic/claude-sonnet-4-5-20250929 ./logs none
+          just test-claude-anthropic ./logs none
 
       - name: Retain last 100 logs
         working-directory: evals/logs
