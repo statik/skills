@@ -30,8 +30,9 @@ test-bedrock log_dir="" display="":
     cd evals && uv run inspect eval dns_skill_eval.py --model {{ bedrock_sonnet }} {{ if log_dir != "" { "--log-dir " + log_dir } else { "" } }} {{ if display != "" { "--display " + display } else { "" } }}
 
 # Run evals using GitHub Copilot CLI (requires GitHub Copilot CLI installed)
+# Note: Model is used for scoring only, not for generation (Copilot CLI handles that)
 test-copilot log_dir="" display="":
-    cd evals && uv run inspect eval dns_skill_eval.py::dns_troubleshooter_copilot_eval {{ if log_dir != "" { "--log-dir " + log_dir } else { "" } }} {{ if display != "" { "--display " + display } else { "" } }}
+    cd evals && uv run inspect eval dns_skill_eval.py@dns_troubleshooter_copilot_eval --model {{ anthropic_sonnet }} {{ if log_dir != "" { "--log-dir " + log_dir } else { "" } }} {{ if display != "" { "--display " + display } else { "" } }}
 
 # Start the test DNS server (runs in foreground)
 dns-server:

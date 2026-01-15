@@ -131,6 +131,16 @@ def run_claude_code(prompt: str, work_dir: Path, model: str | None = None) -> st
 
 def run_copilot_cli(prompt: str, work_dir: Path) -> str:
     """Run GitHub Copilot CLI with the given prompt and return the response."""
+    # Check if copilot CLI is installed
+    if not shutil.which("copilot"):
+        return (
+            "Error: GitHub Copilot CLI is not installed.\n\n"
+            "To install:\n"
+            "1. Visit https://docs.github.com/en/copilot/using-github-copilot/using-github-copilot-in-the-command-line\n"
+            "2. Follow the installation instructions for your platform\n"
+            "3. Authenticate with: gh auth login"
+        )
+
     # Build the command - using --prompt flag for non-interactive usage
     cmd = [
         "copilot",
