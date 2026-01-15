@@ -34,6 +34,10 @@ test-bedrock log_dir="" display="":
 test-copilot log_dir="" display="":
     cd evals && uv run inspect eval dns_skill_eval.py@dns_troubleshooter_copilot_eval --model {{ anthropic_sonnet }} {{ if log_dir != "" { "--log-dir " + log_dir } else { "" } }} {{ if display != "" { "--display " + display } else { "" } }}
 
+# Run evals using GitHub Copilot CLI with AWS Bedrock for scoring
+test-copilot-bedrock log_dir="" display="":
+    cd evals && uv run inspect eval dns_skill_eval.py@dns_troubleshooter_copilot_eval --model {{ bedrock_sonnet }} {{ if log_dir != "" { "--log-dir " + log_dir } else { "" } }} {{ if display != "" { "--display " + display } else { "" } }}
+
 # Start the test DNS server (runs in foreground)
 dns-server:
     cd evals && uv run python dns_server.py
