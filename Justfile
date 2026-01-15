@@ -17,26 +17,24 @@ setup:
 validate:
     uvx --from skills-ref agentskills validate dns-troubleshooter
 
-# Run InspectAI evaluations
-# Usage: just test [model] [log_dir] [display]
-# Examples:
-#   just test                                    # uses defaults
-#   just test anthropic/claude-sonnet-4-5-20250929 ./logs none  # all args
-test model=anthropic_sonnet log_dir="" display="":
-    cd evals && uv run inspect eval dns_skill_eval.py --model {{ model }} {{ if log_dir != "" { "--log-dir " + log_dir } else { "" } }} {{ if display != "" { "--display " + display } else { "" } }}
+# Run evals using Claude Code CLI with Anthropic API for scoring
+test-claude-anthropic log_dir="" display="":
+    cd evals && uv run inspect eval dns_skill_eval.py --model {{ anthropic_sonnet }} {{ if log_dir != "" { "--log-dir " + log_dir } else { "" } }} {{ if display != "" { "--display " + display } else { "" } }}
 
-# Run evals using AWS Bedrock (requires AWS credentials)
-test-bedrock log_dir="" display="":
+# Run evals using Claude Code CLI with AWS Bedrock for scoring
+test-claude-bedrock log_dir="" display="":
     cd evals && uv run inspect eval dns_skill_eval.py --model {{ bedrock_sonnet }} {{ if log_dir != "" { "--log-dir " + log_dir } else { "" } }} {{ if display != "" { "--display " + display } else { "" } }}
 
-# Run evals using GitHub Copilot CLI (requires GitHub Copilot CLI installed)
-# Note: Model is used for scoring only, not for generation (Copilot CLI handles that)
-test-copilot log_dir="" display="":
+# Run evals using GitHub Copilot CLI with Anthropic API for scoring
+test-copilot-anthropic log_dir="" display="":
     cd evals && uv run inspect eval dns_skill_eval.py@dns_troubleshooter_copilot_eval --model {{ anthropic_sonnet }} {{ if log_dir != "" { "--log-dir " + log_dir } else { "" } }} {{ if display != "" { "--display " + display } else { "" } }}
 
 # Run evals using GitHub Copilot CLI with AWS Bedrock for scoring
 test-copilot-bedrock log_dir="" display="":
     cd evals && uv run inspect eval dns_skill_eval.py@dns_troubleshooter_copilot_eval --model {{ bedrock_sonnet }} {{ if log_dir != "" { "--log-dir " + log_dir } else { "" } }} {{ if display != "" { "--display " + display } else { "" } }}
+
+# Alias: default test command (Claude Code CLI + Anthropic)
+test log_dir="" display="": (test-claude-anthropic log_dir display)
 
 # Start the test DNS server (runs in foreground)
 dns-server:

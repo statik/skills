@@ -74,7 +74,7 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           mkdir -p evals/logs
-          just test anthropic/claude-sonnet-4-5-20250929 ./logs none
+          just test-claude-anthropic ./logs none
 
       - name: Parse and summarize eval results
         if: always()

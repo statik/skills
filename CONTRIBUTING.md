@@ -32,10 +32,11 @@ Run `just` to see all available commands:
 | `just setup` | Install dependencies |
 | `just validate` | Validate skill structure |
 | `just check` | Quick validation (no evals) |
-| `just test` | Run full evaluation suite (Claude Code CLI) |
-| `just test-bedrock` | Run evals using AWS Bedrock |
-| `just test-copilot` | Run evals using GitHub Copilot CLI |
-| `just test-copilot-bedrock` | Run Copilot evals with Bedrock scoring |
+| `just test` | Alias for `test-claude-anthropic` |
+| `just test-claude-anthropic` | Claude Code CLI + Anthropic scoring |
+| `just test-claude-bedrock` | Claude Code CLI + Bedrock scoring |
+| `just test-copilot-anthropic` | GitHub Copilot CLI + Anthropic scoring |
+| `just test-copilot-bedrock` | GitHub Copilot CLI + Bedrock scoring |
 | `just release <version>` | Create a new release |
 | `just clean` | Remove generated files |
 
@@ -84,29 +85,31 @@ Evaluations test skills by running them through CLI tools and scoring the result
 
 ### Evaluation Options
 
-**Claude Code CLI (default):**
+All commands follow the pattern `test-<generation>-<scoring>`:
+
+**Claude Code CLI + Anthropic API (default):**
 ```bash
 export ANTHROPIC_API_KEY="your-key"
-just test
+just test-claude-anthropic  # or just: just test
 ```
 Tests the skill using Claude Code CLI with the skill installed in `.claude/skills/`.
 
-**AWS Bedrock:**
+**Claude Code CLI + AWS Bedrock:**
 ```bash
 # Configure AWS credentials first
-just test-bedrock
+just test-claude-bedrock
 ```
-Uses AWS Bedrock for both generation and scoring.
+Uses Claude Code CLI for generation and AWS Bedrock for scoring.
 
-**GitHub Copilot CLI:**
+**GitHub Copilot CLI + Anthropic API:**
 ```bash
 # Install GitHub Copilot CLI first: https://docs.github.com/en/copilot/using-github-copilot/using-github-copilot-in-the-command-line
 export ANTHROPIC_API_KEY="your-key"  # Used for scoring only
-just test-copilot
+just test-copilot-anthropic
 ```
-Tests the skill using GitHub Copilot CLI with the skill installed in `.github/copilot/skills/`. Uses Anthropic API for scoring.
+Tests the skill using GitHub Copilot CLI with the skill installed in `.github/copilot/skills/`.
 
-**GitHub Copilot CLI with Bedrock scoring:**
+**GitHub Copilot CLI + AWS Bedrock:**
 ```bash
 # Configure AWS credentials first
 just test-copilot-bedrock
