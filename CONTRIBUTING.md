@@ -32,8 +32,10 @@ Run `just` to see all available commands:
 | `just setup` | Install dependencies |
 | `just validate` | Validate skill structure |
 | `just check` | Quick validation (no evals) |
-| `just test` | Run full evaluation suite |
+| `just test` | Run full evaluation suite (Claude Code CLI) |
 | `just test-bedrock` | Run evals using AWS Bedrock |
+| `just test-copilot` | Run evals using GitHub Copilot CLI |
+| `just test-copilot-bedrock` | Run Copilot evals with Bedrock scoring |
 | `just release <version>` | Create a new release |
 | `just clean` | Remove generated files |
 
@@ -78,19 +80,38 @@ See the [Agent Skills Specification](https://agentskills.io) for detailed docume
 
 ## Running Evaluations
 
-Evals require an API key. Choose one:
+Evaluations test skills by running them through CLI tools and scoring the results.
 
-**Anthropic API:**
+### Evaluation Options
+
+**Claude Code CLI (default):**
 ```bash
 export ANTHROPIC_API_KEY="your-key"
 just test
 ```
+Tests the skill using Claude Code CLI with the skill installed in `.claude/skills/`.
 
 **AWS Bedrock:**
 ```bash
 # Configure AWS credentials first
 just test-bedrock
 ```
+Uses AWS Bedrock for both generation and scoring.
+
+**GitHub Copilot CLI:**
+```bash
+# Install GitHub Copilot CLI first: https://docs.github.com/en/copilot/using-github-copilot/using-github-copilot-in-the-command-line
+export ANTHROPIC_API_KEY="your-key"  # Used for scoring only
+just test-copilot
+```
+Tests the skill using GitHub Copilot CLI with the skill installed in `.github/copilot/skills/`. Uses Anthropic API for scoring.
+
+**GitHub Copilot CLI with Bedrock scoring:**
+```bash
+# Configure AWS credentials first
+just test-copilot-bedrock
+```
+Uses GitHub Copilot CLI for generation and AWS Bedrock for scoring.
 
 ## Pull Request Guidelines
 
