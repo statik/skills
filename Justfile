@@ -36,6 +36,10 @@ test-copilot-bedrock log_dir="" display="":
 # Alias: default test command (Claude Code CLI + Anthropic)
 test log_dir="" display="": (test-claude-anthropic log_dir display)
 
+# Test if GitHub Copilot CLI is loading the skill correctly
+test-copilot-skill:
+    cd evals && uv run python test_copilot_skill_loading.py
+
 # Start the test DNS server (runs in foreground)
 dns-server:
     cd evals && uv run python dns_server.py
