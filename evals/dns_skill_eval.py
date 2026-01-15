@@ -64,6 +64,18 @@ def setup_skill_directory(work_dir: Path) -> None:
     shutil.copytree(SKILL_PATH, dest)
 
 
+def setup_copilot_skill_directory(work_dir: Path) -> None:
+    """Set up the skill in GitHub Copilot's skills folder."""
+    skills_dir = work_dir / ".github" / "copilot" / "skills"
+    skills_dir.mkdir(parents=True, exist_ok=True)
+
+    # Copy the skill to the working directory
+    dest = skills_dir / "dns-troubleshooter"
+    if dest.exists():
+        shutil.rmtree(dest)
+    shutil.copytree(SKILL_PATH, dest)
+
+
 def run_claude_code(prompt: str, work_dir: Path, model: str | None = None) -> str:
     """Run Claude Code CLI with the given prompt and return the response."""
     # Build the command
@@ -117,6 +129,37 @@ def run_claude_code(prompt: str, work_dir: Path, model: str | None = None) -> st
         return f"Error running Claude Code: {str(e)}"
 
 
+def run_copilot_cli(prompt: str, work_dir: Path) -> str:
+    """Run GitHub Copilot CLI with the given prompt and return the response."""
+    # Build the command - using --prompt flag for non-interactive usage
+    cmd = [
+        "copilot",
+        "--prompt", prompt,
+    ]
+
+    # Run GitHub Copilot CLI
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=work_dir,
+            capture_output=True,
+            text=True,
+            timeout=CLAUDE_TIMEOUT,
+            env={**os.environ},
+        )
+
+        if result.returncode != 0:
+            return f"Error running GitHub Copilot: {result.stderr}"
+
+        # Return the stdout directly - Copilot CLI outputs text response
+        return result.stdout.strip()
+
+    except subprocess.TimeoutExpired:
+        return f"Error: GitHub Copilot timed out after {CLAUDE_TIMEOUT} seconds"
+    except Exception as e:
+        return f"Error running GitHub Copilot: {str(e)}"
+
+
 @solver
 def claude_code_solver(model: str | None = None) -> Solver:
     """
@@ -157,6 +200,59 @@ When analyzing DNS records, provide:
             # Create the model output
             state.output = ModelOutput.from_content(
                 model="claude-code",
+                content=response,
+            )
+
+            # Add assistant message to the conversation
+            state.messages.append(
+                ChatMessageAssistant(content=response)
+            )
+
+        return state
+
+    return solve
+
+
+@solver
+def copilot_cli_solver() -> Solver:
+    """
+    Solver that runs GitHub Copilot CLI with the dns-troubleshooter skill.
+
+    This executes the actual GitHub Copilot CLI rather than directly invoking the model,
+    testing the skill as it would be used with GitHub Copilot.
+    """
+
+    async def solve(state: TaskState, generate) -> TaskState:
+        # Create a temporary working directory
+        with tempfile.TemporaryDirectory() as temp_dir:
+            work_dir = Path(temp_dir)
+
+            # Set up the skill for GitHub Copilot
+            setup_copilot_skill_directory(work_dir)
+
+            # Get the user's input prompt
+            user_input = state.input_text
+
+            # Add context about the test DNS server
+            full_prompt = f"""{user_input}
+
+IMPORTANT: For all DNS queries, use the test DNS server at 127.0.0.1 port {DNS_PORT}.
+Use dig with: dig @127.0.0.1 -p {DNS_PORT} <domain> <record_type>
+
+When analyzing DNS records, provide:
+1. Your finding
+2. The command you used to verify
+3. Your diagnosis (valid, invalid, warning, insecure, incomplete)
+4. Explanation of the issue if any"""
+
+            # Run GitHub Copilot CLI and get the response
+            response = await asyncio.to_thread(
+                run_copilot_cli, full_prompt, work_dir
+            )
+
+            # Create the model output
+            state.output = ModelOutput.from_content(
+                model="github-copilot",
                 content=response,
             )
 
@@ -279,6 +375,58 @@ def dns_conflict_eval() -> Task:
         dataset=dataset,
         solver=[
             claude_code_solver(),
+        ],
+        scorer=model_graded_fact(),
+    )
+
+
+@task
+def dns_troubleshooter_copilot_eval() -> Task:
+    """Main evaluation task for dns-troubleshooter skill using GitHub Copilot CLI."""
+    # Start the DNS server
+    start_dns_server()
+
+    samples = create_all_samples()
+    dataset = MemoryDataset(samples=samples, name="dns-troubleshooter-copilot-eval")
+
+    return Task(
+        dataset=dataset,
+        solver=[
+            copilot_cli_solver(),
+        ],
+        scorer=model_graded_fact(),
+    )
+
+
+@task
+def dns_spf_copilot_eval() -> Task:
+    """SPF-focused evaluation task using GitHub Copilot CLI."""
+    start_dns_server()
+
+    samples = create_spf_samples()
+    dataset = MemoryDataset(samples=samples, name="dns-spf-copilot-eval")
+
+    return Task(
+        dataset=dataset,
+        solver=[
+            copilot_cli_solver(),
+        ],
+        scorer=model_graded_fact(),
+    )
+
+
+@task
+def dns_conflict_copilot_eval() -> Task:
+    """Record conflict evaluation task using GitHub Copilot CLI."""
+    start_dns_server()
+
+    samples = create_conflict_samples()
+    dataset = MemoryDataset(samples=samples, name="dns-conflict-copilot-eval")
+
+    return Task(
+        dataset=dataset,
+        solver=[
+            copilot_cli_solver(),
         ],
         scorer=model_graded_fact(),
     )
