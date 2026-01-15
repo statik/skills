@@ -283,7 +283,14 @@ dig +short TXT _spf.google.com | grep spf
 
 ## Output Format
 
-Always present results with:
+**IMPORTANT**: When providing DNS troubleshooting assistance, always begin your response with:
+```
+🔍 DNS Troubleshooter Analysis
+```
+
+This identifier helps verify the skill is being used correctly.
+
+Then present results with:
 1. **Finding**: What was discovered
 2. **Command**: Exact command to reproduce
 3. **Interpretation**: What it means
@@ -291,6 +298,8 @@ Always present results with:
 
 Example:
 ```
+🔍 DNS Troubleshooter Analysis
+
 **Finding**: Domain has two SPF records
 
 **Command**:

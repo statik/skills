@@ -179,6 +179,8 @@ def analyze_skill_usage(baseline_response, skill_response):
 
     # Check for skill-specific markers
     skill_markers = [
+        "🔍 DNS Troubleshooter Analysis",  # Skill identifier (NEW!)
+        "DNS Troubleshooter",  # Skill name mention
         "dig @",  # Skill emphasizes dig command usage
         "doggo",  # Skill mentions doggo tool
         "v=spf1",  # SPF syntax
@@ -194,6 +196,12 @@ def analyze_skill_usage(baseline_response, skill_response):
 
     print(f"Skill-specific markers in baseline response: {baseline_markers}/{len(skill_markers)}")
     print(f"Skill-specific markers in skilled response: {skill_markers_found}/{len(skill_markers)}")
+
+    # Check for the explicit skill identifier
+    has_skill_identifier = "🔍 DNS Troubleshooter Analysis" in skill_response or "DNS Troubleshooter Analysis" in skill_response
+    if has_skill_identifier:
+        print("\n🎯 EXPLICIT SKILL IDENTIFIER FOUND: '🔍 DNS Troubleshooter Analysis'")
+        print("   This confirms the skill is being loaded and used!\n")
 
     if skill_markers_found > baseline_markers:
         print(f"\n✅ PASSED: Response with skill shows {skill_markers_found - baseline_markers} more skill markers")

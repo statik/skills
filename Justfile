@@ -40,6 +40,10 @@ test log_dir="" display="": (test-claude-anthropic log_dir display)
 test-copilot-skill:
     cd evals && uv run python test_copilot_skill_loading.py
 
+# Check if most recent eval log shows skill usage
+check-skill-usage log_file="":
+    cd evals && uv run python check_skill_usage.py {{ log_file }}
+
 # Start the test DNS server (runs in foreground)
 dns-server:
     cd evals && uv run python dns_server.py

@@ -37,6 +37,8 @@ Run `just` to see all available commands:
 | `just test-claude-bedrock` | Claude Code CLI + Bedrock scoring |
 | `just test-copilot-anthropic` | GitHub Copilot CLI + Anthropic scoring |
 | `just test-copilot-bedrock` | GitHub Copilot CLI + Bedrock scoring |
+| `just test-copilot-skill` | Test if Copilot CLI loads the skill |
+| `just check-skill-usage` | Check if eval logs show skill usage |
 | `just release <version>` | Create a new release |
 | `just clean` | Remove generated files |
 
@@ -115,6 +117,30 @@ Tests the skill using GitHub Copilot CLI with the skill installed in `.github/co
 just test-copilot-bedrock
 ```
 Uses GitHub Copilot CLI for generation and AWS Bedrock for scoring.
+
+### Verifying Skill Usage
+
+To verify that skills are actually being loaded and used by the CLI tools:
+
+**Check a specific eval log:**
+```bash
+just check-skill-usage evals/logs/2026-01-15T12-00-00+00-00_dns-troubleshooter-eval_abc123.eval
+```
+
+**Check the most recent eval log:**
+```bash
+just check-skill-usage
+```
+
+**Test Copilot CLI skill loading:**
+```bash
+just test-copilot-skill
+```
+
+The skill includes an identifier (`🔍 DNS Troubleshooter Analysis`) that appears in responses when the skill is being used. The check tools look for:
+- The explicit skill identifier
+- Skill-specific markers (dig commands, SPF syntax, etc.)
+- Skill-specific knowledge (10-lookup limit, permerror, etc.)
 
 ## Pull Request Guidelines
 
