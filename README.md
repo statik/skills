@@ -8,6 +8,8 @@ A collection of skills that extend Claude's capabilities for specialized tasks.
 |-------|-------------|
 | [dns-troubleshooter](./dns-troubleshooter/) | *It's not DNS / There's no way it's DNS / It was DNS.* Diagnose DNS issues including delegation verification, SPF validation, record conflicts, and authoritative vs local DNS comparison |
 
+> **Copilot Compatible:** All skills in this repository work with both Claude and GitHub Copilot (December 2025+).
+
 ## Installation
 
 Skills can be added to Claude in several ways depending on your environment.
@@ -33,21 +35,35 @@ cp -r skills/dns-troubleshooter ~/.claude/skills/
 
 ### VS Code with GitHub Copilot
 
-1. Open your project in VS Code
-2. Create a `.github/copilot/skills/` directory in your workspace root
-3. Copy the skill folder into it:
+GitHub Copilot supports Agent Skills as of December 2025. Skills can be installed in multiple locations:
 
+**Option 1: GitHub Skills directory (recommended)**
 ```
 your-project/
 ├── .github/
-│   └── copilot/
-│       └── skills/
-│           └── dns-troubleshooter/
-│               ├── SKILL.md
-│               └── references/
-│                   └── spf.md
+│   └── skills/
+│       └── dns-troubleshooter/
+│           ├── SKILL.md
+│           └── references/
+│               └── spf.md
 └── ... your code
 ```
+
+**Option 2: Claude Skills directory (also supported)**
+
+Copilot automatically discovers skills in `.claude/skills/`:
+```
+your-project/
+├── .claude/
+│   └── skills/
+│       └── dns-troubleshooter/
+│           ├── SKILL.md
+│           └── references/
+│               └── spf.md
+└── ... your code
+```
+
+**Note:** Ensure the `chat.useAgentSkills` setting is enabled in VS Code.
 
 ### Claude.app (Desktop)
 
