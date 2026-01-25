@@ -76,3 +76,23 @@ release version:
     echo ""
     echo "Tag v{{ version }} pushed. GitHub Actions will create the release."
     echo "Watch progress at: https://github.com/$(git remote get-url origin | sed 's/.*github.com[:/]//' | sed 's/.git$//')/actions"
+
+# Install skill to Claude Code
+install-claude skill="dns-troubleshooter":
+    ./install.sh --claude {{skill}}
+
+# Install skill to OpenCode
+install-opencode skill="dns-troubleshooter":
+    ./install.sh --opencode {{skill}}
+
+# Install skill to Claude Desktop
+install-desktop skill="dns-troubleshooter":
+    ./install.sh --desktop {{skill}}
+
+# Install skill to GitHub Copilot in a project
+install-copilot skill="dns-troubleshooter" project=".":
+    ./install.sh --copilot {{skill}} {{project}}
+
+# Install skill to all global locations
+install-all skill="dns-troubleshooter":
+    ./install.sh --all {{skill}}
