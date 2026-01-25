@@ -25,24 +25,8 @@ test-claude-anthropic log_dir="" display="":
 test-claude-bedrock log_dir="" display="":
     cd evals && uv run inspect eval dns_skill_eval.py --model {{ bedrock_sonnet }} {{ if log_dir != "" { "--log-dir " + log_dir } else { "" } }} {{ if display != "" { "--display " + display } else { "" } }}
 
-# Run evals using GitHub Copilot CLI with Anthropic API for scoring
-test-copilot-anthropic log_dir="" display="":
-    cd evals && uv run inspect eval dns_skill_eval.py@dns_troubleshooter_copilot_eval --model {{ anthropic_sonnet }} {{ if log_dir != "" { "--log-dir " + log_dir } else { "" } }} {{ if display != "" { "--display " + display } else { "" } }}
-
-# Run evals using GitHub Copilot CLI with AWS Bedrock for scoring
-test-copilot-bedrock log_dir="" display="":
-    cd evals && uv run inspect eval dns_skill_eval.py@dns_troubleshooter_copilot_eval --model {{ bedrock_sonnet }} {{ if log_dir != "" { "--log-dir " + log_dir } else { "" } }} {{ if display != "" { "--display " + display } else { "" } }}
-
 # Alias: default test command (Claude Code CLI + Anthropic)
 test log_dir="" display="": (test-claude-anthropic log_dir display)
-
-# Test if GitHub Copilot CLI is loading the skill correctly
-test-copilot-skill:
-    cd evals && uv run python test_copilot_skill_loading.py
-
-# Check if most recent eval log shows skill usage
-check-skill-usage log_file="":
-    cd evals && uv run python check_skill_usage.py {{ log_file }}
 
 # Start the test DNS server (runs in foreground)
 dns-server:
