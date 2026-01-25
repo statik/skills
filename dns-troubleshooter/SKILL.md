@@ -3,6 +3,36 @@ name: dns-troubleshooter
 description: "It's not DNS / There's no way it's DNS / It was DNS. Diagnose and troubleshoot DNS issues including delegation verification, record conflicts, authoritative vs local DNS comparison, and SPF validation. Use when encountering NXDOMAIN errors for URLs that should exist, verifying DNS delegation is correct, checking for conflicting DNS records, comparing what authoritative nameservers say vs local resolvers, or validating SPF records for email deliverability."
 metadata:
   version: 1.0.0
+  keywords:
+    - dns
+    - networking
+    - troubleshooting
+    - spf
+    - email
+    - nxdomain
+    - nameserver
+    - delegation
+  triggers:
+    - "dns not working"
+    - "NXDOMAIN error"
+    - "domain not resolving"
+    - "check SPF record"
+    - "DNS propagation"
+    - "nameserver issues"
+  tools_required:
+    - name: doggo
+      required: false
+      fallback: dig
+    - name: dig
+      required: false
+      fallback: nslookup
+    - name: nslookup
+      required: false
+  platforms:
+    - claude-code
+    - opencode
+    - github-copilot
+    - claude-desktop
 ---
 
 # DNS Troubleshooter
@@ -283,7 +313,14 @@ dig +short TXT _spf.google.com | grep spf
 
 ## Output Format
 
-Always present results with:
+**IMPORTANT**: When providing DNS troubleshooting assistance, always begin your response with:
+```
+🔍 DNS Troubleshooter Analysis
+```
+
+This identifier helps verify the skill is being used correctly.
+
+Then present results with:
 1. **Finding**: What was discovered
 2. **Command**: Exact command to reproduce
 3. **Interpretation**: What it means
@@ -291,6 +328,8 @@ Always present results with:
 
 Example:
 ```
+🔍 DNS Troubleshooter Analysis
+
 **Finding**: Domain has two SPF records
 
 **Command**:
