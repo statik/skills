@@ -33,6 +33,30 @@ mkdir -p ~/.claude/skills
 cp -r skills/dns-troubleshooter ~/.claude/skills/
 ```
 
+### OpenCode
+
+OpenCode natively supports skills in the same format. Copy skills to one of these locations:
+
+**Project-level (recommended):**
+```bash
+# Native skills directory (OpenCode v1.0.190+)
+cp -r skills/dns-troubleshooter /path/to/your/project/skill/
+
+# Or the .opencode directory
+cp -r skills/dns-troubleshooter /path/to/your/project/.opencode/skills/
+```
+
+**Global installation:**
+```bash
+# XDG config location (Linux/macOS)
+mkdir -p ~/.config/opencode/skills
+cp -r skills/dns-troubleshooter ~/.config/opencode/skills/
+
+# Alternative global location
+mkdir -p ~/.opencode/skills
+cp -r skills/dns-troubleshooter ~/.opencode/skills/
+```
+
 ### VS Code with GitHub Copilot
 
 GitHub Copilot supports Agent Skills as of December 2025. Skills can be installed in multiple locations:
