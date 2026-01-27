@@ -77,6 +77,21 @@ See the [Agent Skills Specification](https://agentskills.io) for detailed docume
 4. Run `just validate` to check your skill
 5. Submit a pull request
 
+### Updating the Manifest
+
+When adding or modifying skills, update `manifest.json` at the repo root:
+
+1. Add a new entry to the `skills` array with:
+   - `name`: Skill directory name
+   - `version`: Current version from SKILL.md
+   - `path`: Relative path to skill directory
+   - `description`: Brief description
+   - `keywords`: Array of relevant keywords
+   - `platforms`: Supported platforms
+   - `files`: Map of skill files
+
+2. Keep the manifest in sync with SKILL.md versions
+
 ## Running Evaluations
 
 Evaluations test skills by running them through CLI tools and scoring the results.
