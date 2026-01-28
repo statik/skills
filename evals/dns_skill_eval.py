@@ -3,6 +3,15 @@ InspectAI eval for dns-troubleshooter skill.
 
 Tests the skill by running Claude Code CLI with the skill installed,
 using a local test DNS server for queries.
+
+Implements eval best practices from:
+https://developers.openai.com/blog/eval-skills/
+
+Measures:
+- Outcome goals: Correct diagnosis (model_graded_fact)
+- Process goals: Did Claude use doggo/dig? Query the right server?
+- Style goals: Proper output format
+- Efficiency goals: Minimal commands
 """
 
 import asyncio
@@ -12,6 +21,8 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
+from dataclasses import dataclass
+from typing import Any
 
 from inspect_ai import Task, task
 from inspect_ai.dataset import Sample, MemoryDataset
@@ -20,7 +31,16 @@ from inspect_ai.scorer import model_graded_fact
 from inspect_ai.solver import Solver, TaskState, solver
 
 from dns_server import TestDNSServer
-from test_zones import get_all_zones, SCENARIOS, TEST_DOMAIN
+from test_zones import get_all_zones, SCENARIOS, TEST_DOMAIN, NEGATIVE_SCENARIOS
+from scorers import (
+    dns_tool_used,
+    doggo_preferred,
+    test_server_queried,
+    correct_domain_queried,
+    command_efficiency,
+    output_format_check,
+    skill_not_triggered,
+)
 
 # Port for the test DNS server
 DNS_PORT = int(os.environ.get("DNS_TEST_PORT", "5053"))
@@ -64,8 +84,55 @@ def setup_skill_directory(work_dir: Path) -> None:
     shutil.copytree(SKILL_PATH, dest)
 
 
-def run_claude_code(prompt: str, work_dir: Path, model: str | None = None) -> str:
-    """Run Claude Code CLI with the given prompt and return the response."""
+@dataclass
+class ClaudeCodeResult:
+    """Result from running Claude Code CLI."""
+    response: str  # Final assistant response text
+    trace: Any  # Full JSON trace for analysis
+    commands: list[dict]  # Extracted command executions
+    success: bool  # Whether execution succeeded
+
+
+def extract_commands_from_output(trace: Any) -> list[dict]:
+    """Extract command executions from Claude Code JSON trace."""
+    commands = []
+
+    if trace is None:
+        return commands
+
+    # Handle list format (array of messages)
+    messages = trace if isinstance(trace, list) else trace.get("messages", [])
+
+    for msg in messages:
+        if msg.get("type") == "assistant":
+            content = msg.get("content", [])
+            for block in content:
+                if block.get("type") == "tool_use":
+                    tool_name = block.get("name", "")
+                    tool_input = block.get("input", {})
+
+                    # Check for bash/command execution tools
+                    if tool_name.lower() in ("bash", "execute", "run", "shell"):
+                        command = tool_input.get("command", "")
+                        commands.append({
+                            "tool": tool_name,
+                            "command": command,
+                            "input": tool_input,
+                        })
+
+    return commands
+
+
+def run_claude_code(prompt: str, work_dir: Path, model: str | None = None) -> ClaudeCodeResult:
+    """
+    Run Claude Code CLI with the given prompt.
+
+    Returns a ClaudeCodeResult containing:
+    - response: The final assistant message text
+    - trace: Full JSON trace for deterministic scoring
+    - commands: Extracted command executions
+    - success: Whether execution completed successfully
+    """
     # Build the command
     cmd = [
         "claude",
@@ -92,38 +159,77 @@ def run_claude_code(prompt: str, work_dir: Path, model: str | None = None) -> st
         )
 
         if result.returncode != 0:
-            return f"Error running Claude Code: {result.stderr}"
+            return ClaudeCodeResult(
+                response=f"Error running Claude Code: {result.stderr}",
+                trace=None,
+                commands=[],
+                success=False,
+            )
 
-        # Parse JSON output to extract the response
+        # Parse JSON output
         try:
-            output = json.loads(result.stdout)
-            # The JSON output contains the conversation - extract the last assistant message
-            if isinstance(output, dict) and "result" in output:
-                return output["result"]
-            elif isinstance(output, list):
-                # Find the last assistant message
-                for msg in reversed(output):
-                    if msg.get("type") == "assistant":
-                        content = msg.get("content", [])
-                        text_parts = [c.get("text", "") for c in content if c.get("type") == "text"]
-                        return "\n".join(text_parts)
-            return result.stdout
+            trace = json.loads(result.stdout)
         except json.JSONDecodeError:
-            return result.stdout
+            return ClaudeCodeResult(
+                response=result.stdout,
+                trace=None,
+                commands=[],
+                success=True,
+            )
+
+        # Extract the final assistant response
+        response = ""
+        if isinstance(trace, dict) and "result" in trace:
+            response = trace["result"]
+        elif isinstance(trace, list):
+            # Find the last assistant message
+            for msg in reversed(trace):
+                if msg.get("type") == "assistant":
+                    content = msg.get("content", [])
+                    text_parts = [c.get("text", "") for c in content if c.get("type") == "text"]
+                    response = "\n".join(text_parts)
+                    break
+
+        # Extract commands for analysis
+        commands = extract_commands_from_output(trace)
+
+        return ClaudeCodeResult(
+            response=response or result.stdout,
+            trace=trace,
+            commands=commands,
+            success=True,
+        )
 
     except subprocess.TimeoutExpired:
-        return f"Error: Claude Code timed out after {CLAUDE_TIMEOUT} seconds"
+        return ClaudeCodeResult(
+            response=f"Error: Claude Code timed out after {CLAUDE_TIMEOUT} seconds",
+            trace=None,
+            commands=[],
+            success=False,
+        )
     except Exception as e:
-        return f"Error running Claude Code: {str(e)}"
+        return ClaudeCodeResult(
+            response=f"Error running Claude Code: {str(e)}",
+            trace=None,
+            commands=[],
+            success=False,
+        )
 
 
 @solver
-def claude_code_solver(model: str | None = None) -> Solver:
+def claude_code_solver(
+    model: str | None = None,
+    explicit_skill: bool = False,
+) -> Solver:
     """
     Solver that runs Claude Code CLI with the dns-troubleshooter skill.
 
     This executes the actual Claude Code CLI rather than directly invoking the model,
     testing the skill as it would be used in practice.
+
+    Args:
+        model: Optional model override
+        explicit_skill: If True, prompt explicitly mentions the skill name
     """
 
     async def solve(state: TaskState, generate) -> TaskState:
@@ -137,11 +243,18 @@ def claude_code_solver(model: str | None = None) -> Solver:
             # Get the user's input prompt
             user_input = state.input_text
 
-            # Add context about the test DNS server
-            full_prompt = f"""{user_input}
+            # Build prompt with test DNS server context
+            # Support both doggo (preferred) and dig (fallback)
+            if explicit_skill:
+                skill_prefix = "Use your dns-troubleshooter skill to: "
+            else:
+                skill_prefix = ""
+
+            full_prompt = f"""{skill_prefix}{user_input}
 
 IMPORTANT: For all DNS queries, use the test DNS server at 127.0.0.1 port {DNS_PORT}.
-Use dig with: dig @127.0.0.1 -p {DNS_PORT} <domain> <record_type>
+- With doggo (preferred): doggo <record_type> <domain> @127.0.0.1:{DNS_PORT}
+- With dig (fallback): dig @127.0.0.1 -p {DNS_PORT} <domain> <record_type>
 
 When analyzing DNS records, provide:
 1. Your finding
@@ -150,19 +263,65 @@ When analyzing DNS records, provide:
 4. Explanation of the issue if any"""
 
             # Run Claude Code and get the response
-            response = await asyncio.to_thread(
+            result = await asyncio.to_thread(
                 run_claude_code, full_prompt, work_dir, model
             )
+
+            # Store the execution trace in metadata for process goal scoring
+            state.metadata["execution_trace"] = result.trace
+            state.metadata["commands_executed"] = result.commands
+            state.metadata["execution_success"] = result.success
+
+            # Also preserve sample metadata (zone, scenario_id, etc.)
+            # These are set by the sample creation functions
 
             # Create the model output
             state.output = ModelOutput.from_content(
                 model="claude-code",
-                content=response,
+                content=result.response,
             )
 
             # Add assistant message to the conversation
             state.messages.append(
-                ChatMessageAssistant(content=response)
+                ChatMessageAssistant(content=result.response)
+            )
+
+        return state
+
+    return solve
+
+
+@solver
+def claude_code_negative_solver(model: str | None = None) -> Solver:
+    """
+    Solver for negative control tests.
+
+    Does NOT add DNS server instructions - tests if skill triggers inappropriately.
+    """
+
+    async def solve(state: TaskState, generate) -> TaskState:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            work_dir = Path(temp_dir)
+            setup_skill_directory(work_dir)
+
+            # Use the prompt as-is, no DNS server context
+            user_input = state.input_text
+
+            result = await asyncio.to_thread(
+                run_claude_code, user_input, work_dir, model
+            )
+
+            state.metadata["execution_trace"] = result.trace
+            state.metadata["commands_executed"] = result.commands
+            state.metadata["execution_success"] = result.success
+
+            state.output = ModelOutput.from_content(
+                model="claude-code",
+                content=result.response,
+            )
+
+            state.messages.append(
+                ChatMessageAssistant(content=result.response)
             )
 
         return state
@@ -190,6 +349,7 @@ def create_spf_samples() -> list[Sample]:
                     "scenario_id": scenario_id,
                     "category": "spf",
                     "expected_diagnosis": expected,
+                    "zone": domain,
                 },
             )
         )
@@ -217,6 +377,31 @@ def create_conflict_samples() -> list[Sample]:
                     "scenario_id": scenario_id,
                     "category": "conflict",
                     "expected_diagnosis": expected,
+                    "zone": domain,
+                },
+            )
+        )
+
+    return samples
+
+
+def create_negative_samples() -> list[Sample]:
+    """
+    Create negative control samples - prompts that should NOT trigger the skill.
+
+    These test that the skill isn't invoked inappropriately.
+    """
+    samples = []
+
+    for scenario_id, scenario in NEGATIVE_SCENARIOS.items():
+        samples.append(
+            Sample(
+                input=scenario["prompt"],
+                target=scenario["expected_behavior"],
+                metadata={
+                    "scenario_id": scenario_id,
+                    "category": "negative_control",
+                    "should_trigger_skill": False,
                 },
             )
         )
@@ -225,7 +410,7 @@ def create_conflict_samples() -> list[Sample]:
 
 
 def create_all_samples() -> list[Sample]:
-    """Create all evaluation samples."""
+    """Create all positive evaluation samples (excludes negative controls)."""
     samples = []
     samples.extend(create_spf_samples())
     samples.extend(create_conflict_samples())
@@ -234,8 +419,15 @@ def create_all_samples() -> list[Sample]:
 
 @task
 def dns_troubleshooter_eval() -> Task:
-    """Main evaluation task for dns-troubleshooter skill using Claude Code CLI."""
-    # Start the DNS server
+    """
+    Main evaluation task for dns-troubleshooter skill using Claude Code CLI.
+
+    Measures:
+    - Outcome: Correct diagnosis (model_graded_fact)
+    - Process: DNS tool used, test server queried
+    - Style: Output format
+    - Efficiency: Command count
+    """
     start_dns_server()
 
     samples = create_all_samples()
@@ -246,7 +438,13 @@ def dns_troubleshooter_eval() -> Task:
         solver=[
             claude_code_solver(),
         ],
-        scorer=model_graded_fact(),
+        scorer=[
+            model_graded_fact(),  # Outcome: correct diagnosis
+            dns_tool_used(),  # Process: used doggo or dig
+            test_server_queried(port=DNS_PORT),  # Process: queried test server
+            correct_domain_queried(),  # Process: queried right domain
+            command_efficiency(),  # Efficiency: reasonable command count
+        ],
     )
 
 
@@ -263,7 +461,11 @@ def dns_spf_eval() -> Task:
         solver=[
             claude_code_solver(),
         ],
-        scorer=model_graded_fact(),
+        scorer=[
+            model_graded_fact(),
+            dns_tool_used(),
+            test_server_queried(port=DNS_PORT),
+        ],
     )
 
 
@@ -280,7 +482,88 @@ def dns_conflict_eval() -> Task:
         solver=[
             claude_code_solver(),
         ],
-        scorer=model_graded_fact(),
+        scorer=[
+            model_graded_fact(),
+            dns_tool_used(),
+            test_server_queried(port=DNS_PORT),
+        ],
+    )
+
+
+@task
+def dns_doggo_preference_eval() -> Task:
+    """
+    Evaluation task specifically measuring doggo vs dig preference.
+
+    Tests whether Claude uses doggo (preferred) over dig (fallback).
+    """
+    start_dns_server()
+
+    samples = create_all_samples()
+    dataset = MemoryDataset(samples=samples, name="dns-doggo-preference-eval")
+
+    return Task(
+        dataset=dataset,
+        solver=[
+            claude_code_solver(),
+        ],
+        scorer=[
+            doggo_preferred(),  # Scores higher for doggo usage
+            model_graded_fact(),
+        ],
+    )
+
+
+@task
+def dns_explicit_skill_eval() -> Task:
+    """
+    Evaluation with explicit skill invocation.
+
+    Tests whether explicitly mentioning the skill improves results.
+    """
+    start_dns_server()
+
+    samples = create_all_samples()
+    dataset = MemoryDataset(samples=samples, name="dns-explicit-skill-eval")
+
+    return Task(
+        dataset=dataset,
+        solver=[
+            claude_code_solver(explicit_skill=True),
+        ],
+        scorer=[
+            model_graded_fact(),
+            dns_tool_used(),
+            test_server_queried(port=DNS_PORT),
+            output_format_check(),
+        ],
+    )
+
+
+@task
+def dns_negative_control_eval() -> Task:
+    """
+    Negative control evaluation - prompts that should NOT trigger the skill.
+
+    Tests that the skill isn't invoked inappropriately for:
+    - General DNS questions (not troubleshooting)
+    - Unrelated tasks
+    - Informational queries
+    """
+    # Note: DNS server not strictly needed but start for consistency
+    start_dns_server()
+
+    samples = create_negative_samples()
+    dataset = MemoryDataset(samples=samples, name="dns-negative-control-eval")
+
+    return Task(
+        dataset=dataset,
+        solver=[
+            claude_code_negative_solver(),
+        ],
+        scorer=[
+            skill_not_triggered(),  # Should NOT use DNS tools
+        ],
     )
 
 
