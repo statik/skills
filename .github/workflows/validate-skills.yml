@@ -63,9 +63,43 @@ jobs:
           if [ -z "$ANTHROPIC_API_KEY" ]; then
             echo "::warning::ANTHROPIC_API_KEY secret is not set. Evals will be skipped."
             echo "SKIP_EVALS=true" >> $GITHUB_ENV
-          else
-            echo "ANTHROPIC_API_KEY is configured"
+            exit 0
+          fi
+
+          echo "ANTHROPIC_API_KEY is set, validating that it works..."
+
+          # Make a minimal API call to verify the key is valid and has credit
+          HTTP_RESPONSE=$(curl -s -w "\n%{http_code}" https://api.anthropic.com/v1/messages \
+            -H "x-api-key: $ANTHROPIC_API_KEY" \
+            -H "anthropic-version: 2023-06-01" \
+            -H "content-type: application/json" \
+            -d '{"model":"claude-haiku-4-20250414","max_tokens":1,"messages":[{"role":"user","content":"hi"}]}')
+
+          HTTP_BODY=$(echo "$HTTP_RESPONSE" | sed '$d')
+          HTTP_STATUS=$(echo "$HTTP_RESPONSE" | tail -1)
+
+          if [ "$HTTP_STATUS" -eq 200 ]; then
+            echo "API key is valid and working."
             echo "SKIP_EVALS=false" >> $GITHUB_ENV
+          elif [ "$HTTP_STATUS" -eq 401 ]; then
+            echo "::error::ANTHROPIC_API_KEY is invalid (HTTP 401). Please update the secret."
+            echo "SKIP_EVALS=true" >> $GITHUB_ENV
+            exit 1
+          elif [ "$HTTP_STATUS" -eq 403 ]; then
+            echo "::error::ANTHROPIC_API_KEY is forbidden (HTTP 403). The key may be disabled."
+            echo "SKIP_EVALS=true" >> $GITHUB_ENV
+            exit 1
+          elif [ "$HTTP_STATUS" -eq 429 ]; then
+            # Extract error message for details (rate limit vs out of credit)
+            ERROR_MSG=$(echo "$HTTP_BODY" | python3 -c "import sys,json; print(json.load(sys.stdin).get('error',{}).get('message','Unknown error'))" 2>/dev/null || echo "Rate limited")
+            echo "::error::Anthropic API rate limited or out of credit (HTTP 429): $ERROR_MSG"
+            echo "SKIP_EVALS=true" >> $GITHUB_ENV
+            exit 1
+          else
+            ERROR_MSG=$(echo "$HTTP_BODY" | python3 -c "import sys,json; print(json.load(sys.stdin).get('error',{}).get('message','Unknown error'))" 2>/dev/null || echo "$HTTP_BODY")
+            echo "::error::Anthropic API key validation failed (HTTP $HTTP_STATUS): $ERROR_MSG"
+            echo "SKIP_EVALS=true" >> $GITHUB_ENV
+            exit 1
           fi
 
       - name: Run InspectAI evals
