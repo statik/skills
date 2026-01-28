@@ -4,6 +4,7 @@
 # Model aliases for convenience
 anthropic_sonnet := "anthropic/claude-sonnet-4-5-20250929"
 bedrock_sonnet := "bedrock/us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+openai_o3 := "openai/o3"
 
 # Default recipe - show available commands
 default:
@@ -24,6 +25,10 @@ test-claude-anthropic log_dir="" display="":
 # Run evals using Claude Code CLI with AWS Bedrock for scoring
 test-claude-bedrock log_dir="" display="":
     cd evals && uv run inspect eval dns_skill_eval.py --model {{ bedrock_sonnet }} {{ if log_dir != "" { "--log-dir " + log_dir } else { "" } }} {{ if display != "" { "--display " + display } else { "" } }}
+
+# Run evals using Codex CLI with OpenAI scoring
+test-codex log_dir="" display="":
+    DNS_SKILL_RUNNER=codex cd evals && uv run inspect eval dns_skill_eval.py --model {{ openai_o3 }} {{ if log_dir != "" { "--log-dir " + log_dir } else { "" } }} {{ if display != "" { "--display " + display } else { "" } }}
 
 # Alias: default test command (Claude Code CLI + Anthropic)
 test log_dir="" display="": (test-claude-anthropic log_dir display)
