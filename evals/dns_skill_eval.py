@@ -563,6 +563,7 @@ def dns_negative_control_eval() -> Task:
         ],
         scorer=[
             skill_not_triggered(),  # Should NOT use DNS tools
+            model_graded_fact(),  # For CI compatibility - checks response quality
         ],
     )
 
