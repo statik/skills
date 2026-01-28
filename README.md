@@ -38,6 +38,9 @@ cp -r skills/dns-troubleshooter ~/.claude/skills/
 Codex loads skills from `$CODEX_HOME/skills` (defaults to `~/.codex/skills`). Install the skill into that directory:
 
 ```bash
+# Codex requires OPENAI_API_KEY
+export OPENAI_API_KEY="your-key"
+
 mkdir -p ~/.codex/skills
 cp -r skills/dns-troubleshooter ~/.codex/skills/
 ```

@@ -117,7 +117,7 @@ Uses Claude Code CLI for generation and AWS Bedrock for scoring.
 
 **Codex CLI + OpenAI API:**
 ```bash
-# Configure OPENAI_API_KEY first
+export OPENAI_API_KEY="your-key"
 just test-codex
 ```
 Uses Codex CLI for generation. The `DNS_SKILL_RUNNER=codex` environment variable switches the eval

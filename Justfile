@@ -28,7 +28,7 @@ test-claude-bedrock log_dir="" display="":
 
 # Run evals using Codex CLI with OpenAI scoring
 test-codex log_dir="" display="":
-    DNS_SKILL_RUNNER=codex cd evals && uv run inspect eval dns_skill_eval.py --model {{ openai_o3 }} {{ if log_dir != "" { "--log-dir " + log_dir } else { "" } }} {{ if display != "" { "--display " + display } else { "" } }}
+    cd evals && DNS_SKILL_RUNNER=codex uv run inspect eval dns_skill_eval.py --model {{ openai_o3 }} {{ if log_dir != "" { "--log-dir " + log_dir } else { "" } }} {{ if display != "" { "--display " + display } else { "" } }}
 
 # Alias: default test command (Claude Code CLI + Anthropic)
 test log_dir="" display="": (test-claude-anthropic log_dir display)

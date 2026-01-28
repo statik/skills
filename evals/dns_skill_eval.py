@@ -1,8 +1,14 @@
 """
 InspectAI eval for dns-troubleshooter skill.
 
-Tests the skill by running a CLI agent with the skill installed,
+Tests the skill by running a CLI agent (Claude Code or Codex) with the skill installed,
 using a local test DNS server for queries.
+
+Environment Variables:
+    DNS_SKILL_RUNNER: Select runner - 'claude' (default) or 'codex'
+    DNS_SKILL_TIMEOUT: CLI timeout in seconds (default: 120)
+    CLAUDE_BIN: Path to Claude CLI binary (default: 'claude')
+    CODEX_BIN: Path to Codex CLI binary (default: 'codex')
 """
 
 import asyncio
@@ -38,6 +44,40 @@ DEFAULT_RUNNER = os.environ.get("DNS_SKILL_RUNNER", "claude").lower()
 CLAUDE_BIN = os.environ.get("CLAUDE_BIN", "claude")
 CODEX_BIN = os.environ.get("CODEX_BIN", "codex")
 
+# Supported runners
+SUPPORTED_RUNNERS = ("claude", "codex")
+
+
+def validate_runner() -> None:
+    """Validate that the selected runner is supported and binary is available."""
+    if DEFAULT_RUNNER not in SUPPORTED_RUNNERS:
+        raise ValueError(
+            f"Invalid DNS_SKILL_RUNNER: '{DEFAULT_RUNNER}'. "
+            f"Must be one of: {', '.join(SUPPORTED_RUNNERS)}"
+        )
+
+    binary = CODEX_BIN if DEFAULT_RUNNER == "codex" else CLAUDE_BIN
+    if not shutil.which(binary):
+        raise RuntimeError(
+            f"CLI binary not found: '{binary}'. "
+            f"Ensure {DEFAULT_RUNNER} CLI is installed and in PATH."
+        )
+
+
+def build_full_prompt(user_input: str) -> str:
+    """Build the full prompt with DNS server context."""
+    return f"""{user_input}
+
+IMPORTANT: For all DNS queries, use the test DNS server at 127.0.0.1 port {DNS_PORT}.
+Use dig with: dig @127.0.0.1 -p {DNS_PORT} <domain> <record_type>
+
+When analyzing DNS records, provide:
+1. Your finding
+2. The command you used to verify
+3. Your diagnosis (valid, invalid, warning, insecure, incomplete)
+4. Explanation of the issue if any"""
+
+
 # Global server instance for the eval
 _server: TestDNSServer | None = None
 
@@ -59,9 +99,14 @@ def stop_dns_server():
         _server = None
 
 
-def setup_claude_skill_directory(work_dir: Path) -> None:
-    """Set up the skill in the working directory's .claude/skills folder."""
-    skills_dir = work_dir / ".claude" / "skills"
+def setup_claude_skill_directory(work_dir: Path) -> Path:
+    """Set up the skill in the working directory's .claude/skills folder.
+
+    Returns:
+        Path to the .claude directory (CLAUDE_HOME equivalent).
+    """
+    claude_home = work_dir / ".claude"
+    skills_dir = claude_home / "skills"
     skills_dir.mkdir(parents=True, exist_ok=True)
 
     # Copy the skill to the working directory
@@ -70,9 +115,15 @@ def setup_claude_skill_directory(work_dir: Path) -> None:
         shutil.rmtree(dest)
     shutil.copytree(SKILL_PATH, dest)
 
+    return claude_home
+
 
 def setup_codex_skill_directory(work_dir: Path) -> Path:
-    """Set up the skill in the working directory's CODEX_HOME/skills folder."""
+    """Set up the skill in the working directory's CODEX_HOME/skills folder.
+
+    Returns:
+        Path to the .codex directory (CODEX_HOME).
+    """
     codex_home = work_dir / ".codex"
     skills_dir = codex_home / "skills"
     skills_dir.mkdir(parents=True, exist_ok=True)
@@ -155,20 +206,8 @@ def claude_code_solver(model: str | None = None) -> Solver:
             # Set up the skill in the working directory
             setup_claude_skill_directory(work_dir)
 
-            # Get the user's input prompt
-            user_input = state.input_text
-
-            # Add context about the test DNS server
-            full_prompt = f"""{user_input}
-
-IMPORTANT: For all DNS queries, use the test DNS server at 127.0.0.1 port {DNS_PORT}.
-Use dig with: dig @127.0.0.1 -p {DNS_PORT} <domain> <record_type>
-
-When analyzing DNS records, provide:
-1. Your finding
-2. The command you used to verify
-3. Your diagnosis (valid, invalid, warning, insecure, incomplete)
-4. Explanation of the issue if any"""
+            # Build the full prompt with DNS server context
+            full_prompt = build_full_prompt(state.input_text)
 
             # Run Claude Code and get the response
             response = await asyncio.to_thread(
@@ -214,7 +253,11 @@ def run_codex(prompt: str, work_dir: Path, codex_home: Path, model: str | None =
             capture_output=True,
             text=True,
             timeout=CLI_TIMEOUT,
-            env={**os.environ, "CODEX_HOME": str(codex_home)},
+            env={
+                **os.environ,
+                "CODEX_HOME": str(codex_home),
+                "OPENAI_API_KEY": os.environ.get("OPENAI_API_KEY", ""),
+            },
         )
 
         if result.returncode != 0:
@@ -251,18 +294,8 @@ def codex_solver(model: str | None = None) -> Solver:
             # Set up the skill in the CODEX_HOME/skills directory
             codex_home = setup_codex_skill_directory(work_dir)
 
-            user_input = state.input_text
-
-            full_prompt = f"""{user_input}
-
-IMPORTANT: For all DNS queries, use the test DNS server at 127.0.0.1 port {DNS_PORT}.
-Use dig with: dig @127.0.0.1 -p {DNS_PORT} <domain> <record_type>
-
-When analyzing DNS records, provide:
-1. Your finding
-2. The command you used to verify
-3. Your diagnosis (valid, invalid, warning, insecure, incomplete)
-4. Explanation of the issue if any"""
+            # Build the full prompt with DNS server context
+            full_prompt = build_full_prompt(state.input_text)
 
             response = await asyncio.to_thread(
                 run_codex, full_prompt, work_dir, codex_home, model
@@ -283,9 +316,15 @@ When analyzing DNS records, provide:
 
 
 def select_solver(model: str | None = None) -> Solver:
-    """Select the CLI solver based on DNS_SKILL_RUNNER."""
-    runner = DEFAULT_RUNNER
-    if runner == "codex":
+    """Select the CLI solver based on DNS_SKILL_RUNNER.
+
+    Raises:
+        ValueError: If DNS_SKILL_RUNNER is not a supported value.
+        RuntimeError: If the CLI binary is not found.
+    """
+    validate_runner()
+
+    if DEFAULT_RUNNER == "codex":
         return codex_solver(model)
     return claude_code_solver(model)
 
