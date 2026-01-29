@@ -8,6 +8,8 @@ A collection of skills that extend Claude's capabilities for specialized tasks.
 |-------|-------------|
 | [dns-troubleshooter](./dns-troubleshooter/) | *It's not DNS / There's no way it's DNS / It was DNS.* Diagnose DNS issues including delegation verification, SPF validation, record conflicts, and authoritative vs local DNS comparison |
 
+> **Copilot Compatible:** All skills in this repository work with both Claude and GitHub Copilot (December 2025+).
+
 ## Quick Install
 
 Use the install script for easy installation:
@@ -19,6 +21,7 @@ cd skills
 
 # Install to a specific platform
 ./install.sh --claude          # Claude Code
+./install.sh --codex           # Codex CLI
 ./install.sh --opencode        # OpenCode
 ./install.sh --desktop         # Claude Desktop
 ./install.sh --copilot . .     # GitHub Copilot (current project)
@@ -26,6 +29,7 @@ cd skills
 
 # Or use just commands
 just install-claude
+just install-codex
 just install-opencode
 just install-all
 ```
@@ -53,23 +57,79 @@ mkdir -p ~/.claude/skills
 cp -r skills/dns-troubleshooter ~/.claude/skills/
 ```
 
+### Codex CLI
+
+Codex loads skills from `$CODEX_HOME/skills` (defaults to `~/.codex/skills`). Install the skill into that directory:
+
+```bash
+# Codex requires OPENAI_API_KEY
+export OPENAI_API_KEY="your-key"
+
+mkdir -p ~/.codex/skills
+cp -r skills/dns-troubleshooter ~/.codex/skills/
+```
+
+To run Codex with the skill available:
+
+```bash
+codex exec "Check if the SPF record for example.com is valid."
+```
+
+### OpenCode
+
+OpenCode natively supports skills in the same format. Copy skills to one of these locations:
+
+**Project-level (recommended):**
+```bash
+# Native skills directory (OpenCode v1.0.190+)
+cp -r skills/dns-troubleshooter /path/to/your/project/skill/
+
+# Or the .opencode directory
+cp -r skills/dns-troubleshooter /path/to/your/project/.opencode/skills/
+```
+
+**Global installation:**
+```bash
+# XDG config location (Linux/macOS)
+mkdir -p ~/.config/opencode/skills
+cp -r skills/dns-troubleshooter ~/.config/opencode/skills/
+
+# Alternative global location
+mkdir -p ~/.opencode/skills
+cp -r skills/dns-troubleshooter ~/.opencode/skills/
+```
+
 ### VS Code with GitHub Copilot
 
-1. Open your project in VS Code
-2. Create a `.github/copilot/skills/` directory in your workspace root
-3. Copy the skill folder into it:
+GitHub Copilot supports Agent Skills as of December 2025. Skills can be installed in multiple locations:
 
+**Option 1: GitHub Skills directory (recommended)**
 ```
 your-project/
 ├── .github/
-│   └── copilot/
-│       └── skills/
-│           └── dns-troubleshooter/
-│               ├── SKILL.md
-│               └── references/
-│                   └── spf.md
+│   └── skills/
+│       └── dns-troubleshooter/
+│           ├── SKILL.md
+│           └── references/
+│               └── spf.md
 └── ... your code
 ```
+
+**Option 2: Claude Skills directory (also supported)**
+
+Copilot automatically discovers skills in `.claude/skills/`:
+```
+your-project/
+├── .claude/
+│   └── skills/
+│       └── dns-troubleshooter/
+│           ├── SKILL.md
+│           └── references/
+│               └── spf.md
+└── ... your code
+```
+
+**Note:** Ensure the `chat.useAgentSkills` setting is enabled in VS Code.
 
 ### Claude.app (Desktop)
 

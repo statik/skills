@@ -44,6 +44,35 @@ jobs:
             exit 1
           fi
 
+          echo "ANTHROPIC_API_KEY is set, validating that it works..."
+
+          HTTP_RESPONSE=$(curl -s -w "\n%{http_code}" https://api.anthropic.com/v1/messages \
+            -H "x-api-key: $ANTHROPIC_API_KEY" \
+            -H "anthropic-version: 2023-06-01" \
+            -H "content-type: application/json" \
+            -d '{"model":"claude-haiku-4-5-20251001","max_tokens":1,"messages":[{"role":"user","content":"hi"}]}')
+
+          HTTP_BODY=$(echo "$HTTP_RESPONSE" | sed '$d')
+          HTTP_STATUS=$(echo "$HTTP_RESPONSE" | tail -1)
+
+          if [ "$HTTP_STATUS" -eq 200 ]; then
+            echo "API key is valid and working."
+          elif [ "$HTTP_STATUS" -eq 401 ]; then
+            echo "::error::ANTHROPIC_API_KEY is invalid (HTTP 401). Please update the secret."
+            exit 1
+          elif [ "$HTTP_STATUS" -eq 403 ]; then
+            echo "::error::ANTHROPIC_API_KEY is forbidden (HTTP 403). The key may be disabled."
+            exit 1
+          elif [ "$HTTP_STATUS" -eq 429 ]; then
+            ERROR_MSG=$(echo "$HTTP_BODY" | python3 -c "import sys,json; print(json.load(sys.stdin).get('error',{}).get('message','Unknown error'))" 2>/dev/null || echo "Rate limited")
+            echo "::error::Anthropic API rate limited or out of credit (HTTP 429): $ERROR_MSG"
+            exit 1
+          else
+            ERROR_MSG=$(echo "$HTTP_BODY" | python3 -c "import sys,json; print(json.load(sys.stdin).get('error',{}).get('message','Unknown error'))" 2>/dev/null || echo "$HTTP_BODY")
+            echo "::error::Anthropic API key validation failed (HTTP $HTTP_STATUS): $ERROR_MSG"
+            exit 1
+          fi
+
       - name: Fetch previous logs from gh-pages
         run: |
           mkdir -p evals/logs
@@ -68,7 +97,7 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          just test anthropic/claude-sonnet-4-5-20250929 ./logs none
+          just test-claude-anthropic ./logs none
 
       - name: Retain last 100 logs
         working-directory: evals/logs

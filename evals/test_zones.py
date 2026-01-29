@@ -220,3 +220,38 @@ SCENARIOS = {
         "description": "MX records with same priority",
     },
 }
+
+
+# =============================================================================
+# Negative Control Scenarios
+# =============================================================================
+# These are prompts that should NOT trigger the dns-troubleshooter skill.
+# Used to test that the skill isn't invoked inappropriately.
+
+NEGATIVE_SCENARIOS = {
+    "negative-simple-lookup": {
+        "prompt": "What is the IP address of google.com?",
+        "expected_behavior": "Answer the question directly without using DNS troubleshooting tools. A simple lookup question does not require diagnostic analysis.",
+        "reason": "Simple lookup, not troubleshooting",
+    },
+    "negative-dns-explanation": {
+        "prompt": "Explain how DNS works and what the different record types mean.",
+        "expected_behavior": "Provide an educational explanation of DNS without running any DNS queries. This is an informational request.",
+        "reason": "Informational/educational, no diagnosis needed",
+    },
+    "negative-unrelated-task": {
+        "prompt": "Help me write a Python function that calculates fibonacci numbers.",
+        "expected_behavior": "Write Python code for fibonacci calculation. This has nothing to do with DNS.",
+        "reason": "Completely unrelated to DNS",
+    },
+    "negative-dns-concept": {
+        "prompt": "What's the difference between A and AAAA records?",
+        "expected_behavior": "Explain the difference between A (IPv4) and AAAA (IPv6) records without running queries.",
+        "reason": "Conceptual question, not a troubleshooting task",
+    },
+    "negative-setup-question": {
+        "prompt": "How do I configure DNS on my Linux server?",
+        "expected_behavior": "Provide guidance on DNS server configuration without running diagnostic queries.",
+        "reason": "Setup/how-to question, not troubleshooting existing issues",
+    },
+}

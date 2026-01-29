@@ -37,6 +37,14 @@ install_opencode() {
     info "Installed to OpenCode successfully"
 }
 
+install_codex() {
+    local dest="${CODEX_HOME:-${HOME}/.codex}/skills/$SKILL_NAME"
+    info "Installing to Codex CLI: $dest"
+    mkdir -p "$(dirname "$dest")"
+    cp -r "$SKILL_PATH" "$dest"
+    info "Installed to Codex CLI successfully"
+}
+
 install_copilot() {
     local project_root="${3:-.}"
     local dest="$project_root/.github/skills/$SKILL_NAME"
@@ -63,6 +71,7 @@ install_claude_desktop() {
 install_all() {
     info "Installing to all platforms..."
     install_claude_code
+    install_codex
     install_opencode
     install_claude_desktop
     warn "Copilot requires a project directory. Use --copilot with project path."
@@ -76,6 +85,7 @@ Usage: ./install.sh [option] [skill-name] [project-path]
 
 Options:
   --claude      Install to Claude Code (~/.claude/skills/)
+  --codex       Install to Codex CLI (~/.codex/skills/)
   --opencode    Install to OpenCode (~/.config/opencode/skills/)
   --copilot     Install to GitHub Copilot (.github/skills/ in project)
   --desktop     Install to Claude Desktop (platform-specific)
@@ -95,6 +105,7 @@ EOF
 
 case "${1:-}" in
     --claude)  install_claude_code ;;
+    --codex)   install_codex ;;
     --opencode) install_opencode ;;
     --copilot) install_copilot "$@" ;;
     --desktop) install_claude_desktop ;;
