@@ -13,6 +13,9 @@ from inspect_ai.scorer import (
     Score,
     Target,
     scorer,
+    accuracy,
+    mean,
+    std,
     CORRECT,
     INCORRECT,
     PARTIAL,
@@ -94,7 +97,7 @@ def check_domain_queried(commands: list[dict], domain: str) -> bool:
     return False
 
 
-@scorer(metrics=["accuracy"])
+@scorer(metrics=[accuracy()])
 def dns_tool_used() -> Scorer:
     """
     Scorer that checks if a DNS lookup tool (doggo or dig) was used.
@@ -143,7 +146,7 @@ def dns_tool_used() -> Scorer:
     return score
 
 
-@scorer(metrics=["accuracy"])
+@scorer(metrics=[accuracy()])
 def doggo_preferred() -> Scorer:
     """
     Scorer that specifically checks if doggo was used (preferred tool).
@@ -179,7 +182,7 @@ def doggo_preferred() -> Scorer:
     return score
 
 
-@scorer(metrics=["accuracy"])
+@scorer(metrics=[accuracy()])
 def test_server_queried(host: str = "127.0.0.1", port: int = 5053) -> Scorer:
     """
     Scorer that checks if the test DNS server was queried.
@@ -208,7 +211,7 @@ def test_server_queried(host: str = "127.0.0.1", port: int = 5053) -> Scorer:
     return score
 
 
-@scorer(metrics=["accuracy"])
+@scorer(metrics=[accuracy()])
 def correct_domain_queried() -> Scorer:
     """
     Scorer that checks if the expected domain was queried.
@@ -252,7 +255,7 @@ def correct_domain_queried() -> Scorer:
     return score
 
 
-@scorer(metrics=["mean", "min", "max"])
+@scorer(metrics=[mean(), std()])
 def command_efficiency(min_commands: int = 1, max_commands: int = 5) -> Scorer:
     """
     Scorer that measures command efficiency.
@@ -294,7 +297,7 @@ def command_efficiency(min_commands: int = 1, max_commands: int = 5) -> Scorer:
     return score
 
 
-@scorer(metrics=["accuracy"])
+@scorer(metrics=[accuracy()])
 def output_format_check() -> Scorer:
     """
     Scorer that checks if the output follows the expected format.
@@ -339,7 +342,7 @@ def output_format_check() -> Scorer:
     return score
 
 
-@scorer(metrics=["accuracy"])
+@scorer(metrics=[accuracy()])
 def skill_not_triggered() -> Scorer:
     """
     Scorer for negative control tests - checks that the skill was NOT used.
