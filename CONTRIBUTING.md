@@ -35,6 +35,7 @@ Run `just` to see all available commands:
 | `just test` | Run evaluations (alias for test-claude-anthropic) |
 | `just test-claude-anthropic` | Claude Code CLI + Anthropic scoring |
 | `just test-claude-bedrock` | Claude Code CLI + Bedrock scoring |
+| `just test-codex` | Codex CLI + OpenAI scoring |
 | `just release <version>` | Create a new release |
 | `just clean` | Remove generated files |
 
@@ -113,6 +114,14 @@ Tests the skill using Claude Code CLI with the skill installed in `.claude/skill
 just test-claude-bedrock
 ```
 Uses Claude Code CLI for generation and AWS Bedrock for scoring.
+
+**Codex CLI + OpenAI API:**
+```bash
+# Configure OPENAI_API_KEY first
+just test-codex
+```
+Uses Codex CLI for generation. The `DNS_SKILL_RUNNER=codex` environment variable switches the eval
+runner, while InspectAI uses the specified OpenAI model for scoring.
 
 ## Pull Request Guidelines
 

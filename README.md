@@ -33,6 +33,21 @@ mkdir -p ~/.claude/skills
 cp -r skills/dns-troubleshooter ~/.claude/skills/
 ```
 
+### Codex CLI
+
+Codex loads skills from `$CODEX_HOME/skills` (defaults to `~/.codex/skills`). Install the skill into that directory:
+
+```bash
+mkdir -p ~/.codex/skills
+cp -r skills/dns-troubleshooter ~/.codex/skills/
+```
+
+To run Codex with the skill available:
+
+```bash
+codex exec "Check if the SPF record for example.com is valid."
+```
+
 ### OpenCode
 
 OpenCode natively supports skills in the same format. Copy skills to one of these locations:
