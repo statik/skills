@@ -1,8 +1,14 @@
 """
 InspectAI eval for dns-troubleshooter skill.
 
-Tests the skill by running Claude Code CLI with the skill installed,
+Tests the skill by running a CLI agent (Claude Code or Codex) with the skill installed,
 using a local test DNS server for queries.
+
+Environment Variables:
+    DNS_SKILL_RUNNER: Select runner - 'claude' (default) or 'codex'
+    DNS_SKILL_TIMEOUT: CLI timeout in seconds (default: 120)
+    CLAUDE_BIN: Path to Claude CLI binary (default: 'claude')
+    CODEX_BIN: Path to Codex CLI binary (default: 'codex')
 """
 
 import asyncio
@@ -28,8 +34,49 @@ DNS_PORT = int(os.environ.get("DNS_TEST_PORT", "5053"))
 # Path to the skill
 SKILL_PATH = Path(__file__).parent.parent / "dns-troubleshooter"
 
-# Timeout for Claude Code execution (seconds)
-CLAUDE_TIMEOUT = 120
+# Timeout for CLI execution (seconds)
+CLI_TIMEOUT = int(os.environ.get("DNS_SKILL_TIMEOUT", "120"))
+
+# CLI runner selection (claude or codex)
+DEFAULT_RUNNER = os.environ.get("DNS_SKILL_RUNNER", "claude").lower()
+
+# Optional CLI binary overrides
+CLAUDE_BIN = os.environ.get("CLAUDE_BIN", "claude")
+CODEX_BIN = os.environ.get("CODEX_BIN", "codex")
+
+# Supported runners
+SUPPORTED_RUNNERS = ("claude", "codex")
+
+
+def validate_runner() -> None:
+    """Validate that the selected runner is supported and binary is available."""
+    if DEFAULT_RUNNER not in SUPPORTED_RUNNERS:
+        raise ValueError(
+            f"Invalid DNS_SKILL_RUNNER: '{DEFAULT_RUNNER}'. "
+            f"Must be one of: {', '.join(SUPPORTED_RUNNERS)}"
+        )
+
+    binary = CODEX_BIN if DEFAULT_RUNNER == "codex" else CLAUDE_BIN
+    if not shutil.which(binary):
+        raise RuntimeError(
+            f"CLI binary not found: '{binary}'. "
+            f"Ensure {DEFAULT_RUNNER} CLI is installed and in PATH."
+        )
+
+
+def build_full_prompt(user_input: str) -> str:
+    """Build the full prompt with DNS server context."""
+    return f"""{user_input}
+
+IMPORTANT: For all DNS queries, use the test DNS server at 127.0.0.1 port {DNS_PORT}.
+Use dig with: dig @127.0.0.1 -p {DNS_PORT} <domain> <record_type>
+
+When analyzing DNS records, provide:
+1. Your finding
+2. The command you used to verify
+3. Your diagnosis (valid, invalid, warning, insecure, incomplete)
+4. Explanation of the issue if any"""
+
 
 # Global server instance for the eval
 _server: TestDNSServer | None = None
@@ -52,9 +99,14 @@ def stop_dns_server():
         _server = None
 
 
-def setup_skill_directory(work_dir: Path) -> None:
-    """Set up the skill in the working directory's .claude/skills folder."""
-    skills_dir = work_dir / ".claude" / "skills"
+def setup_claude_skill_directory(work_dir: Path) -> Path:
+    """Set up the skill in the working directory's .claude/skills folder.
+
+    Returns:
+        Path to the .claude directory (CLAUDE_HOME equivalent).
+    """
+    claude_home = work_dir / ".claude"
+    skills_dir = claude_home / "skills"
     skills_dir.mkdir(parents=True, exist_ok=True)
 
     # Copy the skill to the working directory
@@ -63,12 +115,32 @@ def setup_skill_directory(work_dir: Path) -> None:
         shutil.rmtree(dest)
     shutil.copytree(SKILL_PATH, dest)
 
+    return claude_home
+
+
+def setup_codex_skill_directory(work_dir: Path) -> Path:
+    """Set up the skill in the working directory's CODEX_HOME/skills folder.
+
+    Returns:
+        Path to the .codex directory (CODEX_HOME).
+    """
+    codex_home = work_dir / ".codex"
+    skills_dir = codex_home / "skills"
+    skills_dir.mkdir(parents=True, exist_ok=True)
+
+    dest = skills_dir / "dns-troubleshooter"
+    if dest.exists():
+        shutil.rmtree(dest)
+    shutil.copytree(SKILL_PATH, dest)
+
+    return codex_home
+
 
 def run_claude_code(prompt: str, work_dir: Path, model: str | None = None) -> str:
     """Run Claude Code CLI with the given prompt and return the response."""
     # Build the command
     cmd = [
-        "claude",
+        CLAUDE_BIN,
         "--print",
         "--dangerously-skip-permissions",
         "--output-format", "json",
@@ -87,7 +159,7 @@ def run_claude_code(prompt: str, work_dir: Path, model: str | None = None) -> st
             cwd=work_dir,
             capture_output=True,
             text=True,
-            timeout=CLAUDE_TIMEOUT,
+            timeout=CLI_TIMEOUT,
             env={**os.environ, "ANTHROPIC_API_KEY": os.environ.get("ANTHROPIC_API_KEY", "")},
         )
 
@@ -112,7 +184,7 @@ def run_claude_code(prompt: str, work_dir: Path, model: str | None = None) -> st
             return result.stdout
 
     except subprocess.TimeoutExpired:
-        return f"Error: Claude Code timed out after {CLAUDE_TIMEOUT} seconds"
+        return f"Error: Claude Code timed out after {CLI_TIMEOUT} seconds"
     except Exception as e:
         return f"Error running Claude Code: {str(e)}"
 
@@ -132,22 +204,10 @@ def claude_code_solver(model: str | None = None) -> Solver:
             work_dir = Path(temp_dir)
 
             # Set up the skill in the working directory
-            setup_skill_directory(work_dir)
+            setup_claude_skill_directory(work_dir)
 
-            # Get the user's input prompt
-            user_input = state.input_text
-
-            # Add context about the test DNS server
-            full_prompt = f"""{user_input}
-
-IMPORTANT: For all DNS queries, use the test DNS server at 127.0.0.1 port {DNS_PORT}.
-Use dig with: dig @127.0.0.1 -p {DNS_PORT} <domain> <record_type>
-
-When analyzing DNS records, provide:
-1. Your finding
-2. The command you used to verify
-3. Your diagnosis (valid, invalid, warning, insecure, incomplete)
-4. Explanation of the issue if any"""
+            # Build the full prompt with DNS server context
+            full_prompt = build_full_prompt(state.input_text)
 
             # Run Claude Code and get the response
             response = await asyncio.to_thread(
@@ -168,6 +228,105 @@ When analyzing DNS records, provide:
         return state
 
     return solve
+
+
+def run_codex(prompt: str, work_dir: Path, codex_home: Path, model: str | None = None) -> str:
+    """Run Codex CLI with the given prompt and return the response."""
+    output_path = work_dir / "codex_last_message.txt"
+    cmd = [
+        CODEX_BIN,
+        "exec",
+        "--skip-git-repo-check",
+        "--dangerously-bypass-approvals-and-sandbox",
+        "--output-last-message", str(output_path),
+    ]
+
+    if model:
+        cmd.extend(["--model", model])
+
+    cmd.append(prompt)
+
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=work_dir,
+            capture_output=True,
+            text=True,
+            timeout=CLI_TIMEOUT,
+            env={
+                **os.environ,
+                "CODEX_HOME": str(codex_home),
+                "OPENAI_API_KEY": os.environ.get("OPENAI_API_KEY", ""),
+            },
+        )
+
+        if result.returncode != 0:
+            stderr = result.stderr.strip()
+            stdout = result.stdout.strip()
+            return f"Error running Codex: {stderr or stdout}"
+
+        if output_path.exists():
+            output = output_path.read_text().strip()
+            if output:
+                return output
+
+        return result.stdout.strip() or "No output from Codex."
+
+    except subprocess.TimeoutExpired:
+        return f"Error: Codex timed out after {CLI_TIMEOUT} seconds"
+    except Exception as e:
+        return f"Error running Codex: {str(e)}"
+
+
+@solver
+def codex_solver(model: str | None = None) -> Solver:
+    """
+    Solver that runs Codex CLI with the dns-troubleshooter skill.
+
+    This executes the Codex CLI rather than directly invoking the model,
+    testing the skill as it would be used in practice.
+    """
+
+    async def solve(state: TaskState, generate) -> TaskState:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            work_dir = Path(temp_dir)
+
+            # Set up the skill in the CODEX_HOME/skills directory
+            codex_home = setup_codex_skill_directory(work_dir)
+
+            # Build the full prompt with DNS server context
+            full_prompt = build_full_prompt(state.input_text)
+
+            response = await asyncio.to_thread(
+                run_codex, full_prompt, work_dir, codex_home, model
+            )
+
+            state.output = ModelOutput.from_content(
+                model="codex",
+                content=response,
+            )
+
+            state.messages.append(
+                ChatMessageAssistant(content=response)
+            )
+
+        return state
+
+    return solve
+
+
+def select_solver(model: str | None = None) -> Solver:
+    """Select the CLI solver based on DNS_SKILL_RUNNER.
+
+    Raises:
+        ValueError: If DNS_SKILL_RUNNER is not a supported value.
+        RuntimeError: If the CLI binary is not found.
+    """
+    validate_runner()
+
+    if DEFAULT_RUNNER == "codex":
+        return codex_solver(model)
+    return claude_code_solver(model)
 
 
 def create_spf_samples() -> list[Sample]:
@@ -234,7 +393,7 @@ def create_all_samples() -> list[Sample]:
 
 @task
 def dns_troubleshooter_eval() -> Task:
-    """Main evaluation task for dns-troubleshooter skill using Claude Code CLI."""
+    """Main evaluation task for dns-troubleshooter skill using a CLI runner."""
     # Start the DNS server
     start_dns_server()
 
@@ -244,7 +403,7 @@ def dns_troubleshooter_eval() -> Task:
     return Task(
         dataset=dataset,
         solver=[
-            claude_code_solver(),
+            select_solver(),
         ],
         scorer=model_graded_fact(),
     )
@@ -252,7 +411,7 @@ def dns_troubleshooter_eval() -> Task:
 
 @task
 def dns_spf_eval() -> Task:
-    """SPF-focused evaluation task using Claude Code CLI."""
+    """SPF-focused evaluation task using a CLI runner."""
     start_dns_server()
 
     samples = create_spf_samples()
@@ -261,7 +420,7 @@ def dns_spf_eval() -> Task:
     return Task(
         dataset=dataset,
         solver=[
-            claude_code_solver(),
+            select_solver(),
         ],
         scorer=model_graded_fact(),
     )
@@ -269,7 +428,7 @@ def dns_spf_eval() -> Task:
 
 @task
 def dns_conflict_eval() -> Task:
-    """Record conflict evaluation task using Claude Code CLI."""
+    """Record conflict evaluation task using a CLI runner."""
     start_dns_server()
 
     samples = create_conflict_samples()
@@ -278,7 +437,7 @@ def dns_conflict_eval() -> Task:
     return Task(
         dataset=dataset,
         solver=[
-            claude_code_solver(),
+            select_solver(),
         ],
         scorer=model_graded_fact(),
     )
