@@ -10,6 +10,30 @@ A collection of skills that extend Claude's capabilities for specialized tasks.
 
 > **Copilot Compatible:** All skills in this repository work with both Claude and GitHub Copilot (December 2025+).
 
+## Quick Install
+
+Use the install script for easy installation:
+
+```bash
+# Clone the repo
+git clone https://github.com/statik/skills.git
+cd skills
+
+# Install to a specific platform
+./install.sh --claude          # Claude Code
+./install.sh --codex           # Codex CLI
+./install.sh --opencode        # OpenCode
+./install.sh --desktop         # Claude Desktop
+./install.sh --copilot . .     # GitHub Copilot (current project)
+./install.sh --all             # All global locations
+
+# Or use just commands
+just install-claude
+just install-codex
+just install-opencode
+just install-all
+```
+
 ## Installation
 
 Skills can be added to Claude in several ways depending on your environment.
