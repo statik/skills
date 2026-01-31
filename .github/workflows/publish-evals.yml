@@ -123,12 +123,9 @@ jobs:
           touch ../site/.nojekyll
 
       - name: Deploy to gh-pages
-        run: |
-          cd site
-          git init
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout -b gh-pages
-          git add -A
-          git commit -m "Update eval results - $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
-          git push -f https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git gh-pages
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          branch: gh-pages
+          folder: site
+          clean: true
+          clean-exclude: pr-preview
