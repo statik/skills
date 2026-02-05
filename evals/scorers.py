@@ -68,8 +68,9 @@ def check_tool_in_commands(commands: list[dict], tool_name: str) -> bool:
     tool_lower = tool_name.lower()
     for cmd in commands:
         command_str = cmd.get("command", "").lower()
-        # Check if tool appears at start of command or after pipe/semicolon
-        if re.search(rf'(^|\||;|&&|\s){tool_lower}\s', command_str):
+        # Check if tool appears as a command (at start, after separator, or after quotes)
+        # Allow tool to be followed by whitespace, @, or end of string
+        if re.search(rf'(?:^|[\s|;&"\']){tool_lower}(?:\s|@|$)', command_str):
             return True
     return False
 
