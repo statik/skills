@@ -5,15 +5,67 @@ Tests the skill's ability to diagnose DNS issues using a local test DNS server.
 """
 
 import os
+import re
 from pathlib import Path
 
 from inspect_ai import Task, task
 from inspect_ai.dataset import Sample, MemoryDataset
-from inspect_ai.scorer import model_graded_fact
+from inspect_ai.scorer import scorer, accuracy, stderr, Score, CORRECT, INCORRECT
 from inspect_ai.solver import generate, system_message
 
 from dns_server import TestDNSServer
 from test_zones import get_all_zones, SCENARIOS, TEST_DOMAIN
+
+# Valid diagnosis values the model should output
+VALID_DIAGNOSES = {"valid", "invalid", "warning", "insecure", "incomplete"}
+
+
+@scorer(metrics=[accuracy(), stderr()])
+def diagnosis_match():
+    """Score by matching the diagnosis keyword in the model's response.
+
+    Extracts the diagnosis from the model output and compares it to the
+    expected_diagnosis in sample metadata. No model grading required.
+    """
+
+    async def score(state, target):
+        # Get expected diagnosis from metadata
+        expected = state.metadata.get("expected_diagnosis", "").lower()
+
+        # Extract diagnosis from model output
+        completion = state.output.completion.lower()
+
+        # Look for explicit diagnosis patterns
+        patterns = [
+            r"diagnos(?:is|ed?\s+as)[:\s]+(\w+)",
+            r"status[:\s]+(\w+)",
+            r"conclusion[:\s]+(\w+)",
+        ]
+
+        found_diagnosis = None
+        for pattern in patterns:
+            match = re.search(pattern, completion)
+            if match and match.group(1) in VALID_DIAGNOSES:
+                found_diagnosis = match.group(1)
+                break
+
+        # Fallback: check if any diagnosis keyword appears prominently
+        if not found_diagnosis:
+            for diag in VALID_DIAGNOSES:
+                if diag in completion:
+                    found_diagnosis = diag
+                    break
+
+        is_correct = found_diagnosis == expected
+
+        return Score(
+            value=CORRECT if is_correct else INCORRECT,
+            answer=found_diagnosis or "not found",
+            explanation=f"Expected: {expected}, Found: {found_diagnosis}"
+        )
+
+    return score
+
 
 # Port for the test DNS server
 DNS_PORT = int(os.environ.get("DNS_TEST_PORT", "5053"))
@@ -148,7 +200,7 @@ def dns_troubleshooter_eval() -> Task:
             system_message(make_system_prompt()),
             generate(),
         ],
-        scorer=model_graded_fact(),
+        scorer=diagnosis_match(),
     )
 
 
@@ -166,7 +218,7 @@ def dns_spf_eval() -> Task:
             system_message(make_system_prompt()),
             generate(),
         ],
-        scorer=model_graded_fact(),
+        scorer=diagnosis_match(),
     )
 
 
@@ -184,7 +236,7 @@ def dns_conflict_eval() -> Task:
             system_message(make_system_prompt()),
             generate(),
         ],
-        scorer=model_graded_fact(),
+        scorer=diagnosis_match(),
     )
 
 
