@@ -3,18 +3,22 @@ name: Validate Skills
 on:
   pull_request:
     branches: [main]
+    types: [opened, reopened, synchronize, closed]
   push:
     branches: [main]
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
+
+concurrency: preview-${{ github.ref }}
 
 env:
   PYTHONUNBUFFERED: "1"
 
 jobs:
   validate:
+    if: github.event.action != 'closed'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -31,46 +35,119 @@ jobs:
 
   run-evals:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Install just
+        if: github.event.action != 'closed'
         uses: extractions/setup-just@v2
 
       - name: Install uv
+        if: github.event.action != 'closed'
         uses: astral-sh/setup-uv@v5
 
       - name: Set up Python
+        if: github.event.action != 'closed'
         run: uv python install 3.11
 
       - name: Install dependencies
+        if: github.event.action != 'closed'
         run: just setup
 
+      - name: Set up Node.js
+        if: github.event.action != 'closed'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Claude Code CLI
+        if: github.event.action != 'closed'
+        run: npm install -g @anthropic-ai/claude-code
+
       - name: Check API key
+        if: github.event.action != 'closed'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           if [ -z "$ANTHROPIC_API_KEY" ]; then
             echo "::warning::ANTHROPIC_API_KEY secret is not set. Evals will be skipped."
             echo "SKIP_EVALS=true" >> $GITHUB_ENV
-          else
-            echo "ANTHROPIC_API_KEY is configured"
+            exit 0
+          fi
+
+          echo "ANTHROPIC_API_KEY is set, validating that it works..."
+
+          # Make a minimal API call to verify the key is valid and has credit
+          HTTP_RESPONSE=$(curl -s -w "\n%{http_code}" https://api.anthropic.com/v1/messages \
+            -H "x-api-key: $ANTHROPIC_API_KEY" \
+            -H "anthropic-version: 2023-06-01" \
+            -H "content-type: application/json" \
+            -d '{"model":"claude-haiku-4-5-20251001","max_tokens":1,"messages":[{"role":"user","content":"hi"}]}')
+
+          HTTP_BODY=$(echo "$HTTP_RESPONSE" | sed '$d')
+          HTTP_STATUS=$(echo "$HTTP_RESPONSE" | tail -1)
+
+          if [ "$HTTP_STATUS" -eq 200 ]; then
+            echo "API key is valid and working."
             echo "SKIP_EVALS=false" >> $GITHUB_ENV
+          elif [ "$HTTP_STATUS" -eq 401 ]; then
+            echo "::error::ANTHROPIC_API_KEY is invalid (HTTP 401). Please update the secret."
+            echo "SKIP_EVALS=true" >> $GITHUB_ENV
+            exit 1
+          elif [ "$HTTP_STATUS" -eq 403 ]; then
+            echo "::error::ANTHROPIC_API_KEY is forbidden (HTTP 403). The key may be disabled."
+            echo "SKIP_EVALS=true" >> $GITHUB_ENV
+            exit 1
+          elif [ "$HTTP_STATUS" -eq 429 ]; then
+            # Extract error message for details (rate limit vs out of credit)
+            ERROR_MSG=$(echo "$HTTP_BODY" | python3 -c "import sys,json; print(json.load(sys.stdin).get('error',{}).get('message','Unknown error'))" 2>/dev/null || echo "Rate limited")
+            echo "::error::Anthropic API rate limited or out of credit (HTTP 429): $ERROR_MSG"
+            echo "SKIP_EVALS=true" >> $GITHUB_ENV
+            exit 1
+          else
+            ERROR_MSG=$(echo "$HTTP_BODY" | python3 -c "import sys,json; print(json.load(sys.stdin).get('error',{}).get('message','Unknown error'))" 2>/dev/null || echo "$HTTP_BODY")
+            echo "::error::Anthropic API key validation failed (HTTP $HTTP_STATUS): $ERROR_MSG"
+            echo "SKIP_EVALS=true" >> $GITHUB_ENV
+            exit 1
           fi
 
       - name: Run InspectAI evals
-        if: env.SKIP_EVALS != 'true'
+        if: env.SKIP_EVALS != 'true' && github.event.action != 'closed'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           mkdir -p evals/logs
-          just test anthropic/claude-sonnet-4-5-20250929 ./logs none
+          just test-claude-anthropic ./logs none
+
+      - name: Generate eval viewer bundle
+        if: env.SKIP_EVALS != 'true' && github.event.action != 'closed'
+        working-directory: evals
+        run: |
+          uv run inspect view bundle \
+            --log-dir ./logs \
+            --output-dir ../pr-preview-site \
+            --overwrite
+          touch ../pr-preview-site/.nojekyll
+
+      - name: Deploy PR preview
+        if: >-
+          github.event_name == 'pull_request'
+          && (github.event.action == 'closed' || env.SKIP_EVALS != 'true')
+        uses: rossjrw/pr-preview-action@v1
+        with:
+          source-dir: ./pr-preview-site/
+          preview-branch: gh-pages
+          umbrella-dir: pr-preview
+          action: auto
+          comment: false
 
       - name: Parse and summarize eval results
-        if: always()
+        if: always() && github.event.action != 'closed'
         working-directory: evals
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           uv run python << 'PYTHON_SCRIPT'
           import json
@@ -108,7 +185,7 @@ jobs:
 
           if not log_files:
               summary = "## DNS Troubleshooter Eval Results\n\n"
-              summary += "**Status:** ❌ No eval logs found\n\n"
+              summary += "**Status:** No eval logs found\n\n"
               summary += "Check the workflow logs for errors during eval execution.\n"
               with open(os.environ.get("GITHUB_STEP_SUMMARY", "summary.md"), "a") as f:
                   f.write(summary)
@@ -179,21 +256,31 @@ jobs:
                   # Check for sample error first
                   sample_error = sample.get("error")
                   if sample_error:
-                      result_icon = "🔴 Error"
+                      result_icon = "Error"
                   else:
                       score = sample.get("scores", {}).get("model_graded_fact", {})
                       value = score.get("value", "?")
 
                       if value == "C":
-                          result_icon = "✅"
+                          result_icon = "PASS"
                       elif value == "I":
-                          result_icon = "❌"
+                          result_icon = "FAIL"
                       else:
-                          result_icon = "⚠️"
+                          result_icon = "WARN"
 
                   summary += f"| {sample_id} | {category} | {expected} | {result_icon} |\n"
 
           summary += f"\n*Eval run: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*\n"
+
+          # Add preview link for PR events
+          pr_number = os.environ.get("PR_NUMBER", "")
+          github_repository = os.environ.get("GITHUB_REPOSITORY", "")
+          if pr_number and github_repository:
+              parts = github_repository.split("/")
+              owner = parts[0]
+              repo_name = parts[1]
+              preview_url = f"https://{owner}.github.io/{repo_name}/pr-preview/pr-{pr_number}/"
+              summary += f"\n**[View full interactive eval results]({preview_url})**\n"
 
           # Write to GitHub Actions summary
           with open(os.environ.get("GITHUB_STEP_SUMMARY", "/dev/null"), "a") as f:
@@ -215,7 +302,7 @@ jobs:
           PYTHON_SCRIPT
 
       - name: Upload eval logs
-        if: always()
+        if: always() && github.event.action != 'closed'
         uses: actions/upload-artifact@v4
         with:
           name: inspect-eval-logs
@@ -225,7 +312,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Find existing comment
-        if: github.event_name == 'pull_request' && always()
+        if: github.event_name == 'pull_request' && github.event.action != 'closed' && always()
         uses: peter-evans/find-comment@v3
         id: find-comment
         with:
@@ -233,7 +320,7 @@ jobs:
           body-includes: "## DNS Troubleshooter Eval Results"
 
       - name: Comment on PR
-        if: github.event_name == 'pull_request' && always()
+        if: github.event_name == 'pull_request' && github.event.action != 'closed' && always()
         uses: peter-evans/create-or-update-comment@v4
         with:
           issue-number: ${{ github.event.pull_request.number }}

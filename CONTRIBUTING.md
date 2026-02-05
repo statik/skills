@@ -32,8 +32,10 @@ Run `just` to see all available commands:
 | `just setup` | Install dependencies |
 | `just validate` | Validate skill structure |
 | `just check` | Quick validation (no evals) |
-| `just test` | Run full evaluation suite |
-| `just test-bedrock` | Run evals using AWS Bedrock |
+| `just test` | Run evaluations (alias for test-claude-anthropic) |
+| `just test-claude-anthropic` | Claude Code CLI + Anthropic scoring |
+| `just test-claude-bedrock` | Claude Code CLI + Bedrock scoring |
+| `just test-codex` | Codex CLI + OpenAI scoring |
 | `just release <version>` | Create a new release |
 | `just clean` | Remove generated files |
 
@@ -76,21 +78,50 @@ See the [Agent Skills Specification](https://agentskills.io) for detailed docume
 4. Run `just validate` to check your skill
 5. Submit a pull request
 
+### Updating the Manifest
+
+When adding or modifying skills, update `manifest.json` at the repo root:
+
+1. Add a new entry to the `skills` array with:
+   - `name`: Skill directory name
+   - `version`: Current version from SKILL.md
+   - `path`: Relative path to skill directory
+   - `description`: Brief description
+   - `keywords`: Array of relevant keywords
+   - `platforms`: Supported platforms
+   - `files`: Map of skill files
+
+2. Keep the manifest in sync with SKILL.md versions
+
 ## Running Evaluations
 
-Evals require an API key. Choose one:
+Evaluations test skills by running them through CLI tools and scoring the results.
 
-**Anthropic API:**
+### Evaluation Options
+
+All commands follow the pattern `test-<generation>-<scoring>`:
+
+**Claude Code CLI + Anthropic API (default):**
 ```bash
 export ANTHROPIC_API_KEY="your-key"
-just test
+just test-claude-anthropic  # or just: just test
 ```
+Tests the skill using Claude Code CLI with the skill installed in `.claude/skills/`.
 
-**AWS Bedrock:**
+**Claude Code CLI + AWS Bedrock:**
 ```bash
 # Configure AWS credentials first
-just test-bedrock
+just test-claude-bedrock
 ```
+Uses Claude Code CLI for generation and AWS Bedrock for scoring.
+
+**Codex CLI + OpenAI API:**
+```bash
+export OPENAI_API_KEY="your-key"
+just test-codex
+```
+Uses Codex CLI for generation. The `DNS_SKILL_RUNNER=codex` environment variable switches the eval
+runner, while InspectAI uses the specified OpenAI model for scoring.
 
 ## Pull Request Guidelines
 

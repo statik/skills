@@ -4,6 +4,7 @@
 # Model aliases for convenience
 anthropic_sonnet := "anthropic/claude-sonnet-4-5-20250929"
 bedrock_sonnet := "bedrock/us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+openai_o3 := "openai/o3"
 
 # Default recipe - show available commands
 default:
@@ -17,17 +18,20 @@ setup:
 validate:
     uvx --from skills-ref agentskills validate dns-troubleshooter
 
-# Run InspectAI evaluations
-# Usage: just test [model] [log_dir] [display]
-# Examples:
-#   just test                                    # uses defaults
-#   just test anthropic/claude-sonnet-4-5-20250929 ./logs none  # all args
-test model=anthropic_sonnet log_dir="" display="":
-    cd evals && uv run inspect eval dns_skill_eval.py --model {{ model }} {{ if log_dir != "" { "--log-dir " + log_dir } else { "" } }} {{ if display != "" { "--display " + display } else { "" } }}
+# Run evals using Claude Code CLI with Anthropic API for scoring
+test-claude-anthropic log_dir="" display="":
+    cd evals && uv run inspect eval dns_skill_eval.py --model {{ anthropic_sonnet }} {{ if log_dir != "" { "--log-dir " + log_dir } else { "" } }} {{ if display != "" { "--display " + display } else { "" } }}
 
-# Run evals using AWS Bedrock (requires AWS credentials)
-test-bedrock log_dir="" display="":
+# Run evals using Claude Code CLI with AWS Bedrock for scoring
+test-claude-bedrock log_dir="" display="":
     cd evals && uv run inspect eval dns_skill_eval.py --model {{ bedrock_sonnet }} {{ if log_dir != "" { "--log-dir " + log_dir } else { "" } }} {{ if display != "" { "--display " + display } else { "" } }}
+
+# Run evals using Codex CLI with OpenAI scoring
+test-codex log_dir="" display="":
+    cd evals && DNS_SKILL_RUNNER=codex uv run inspect eval dns_skill_eval.py --model {{ openai_o3 }} {{ if log_dir != "" { "--log-dir " + log_dir } else { "" } }} {{ if display != "" { "--display " + display } else { "" } }}
+
+# Alias: default test command (Claude Code CLI + Anthropic)
+test log_dir="" display="": (test-claude-anthropic log_dir display)
 
 # Start the test DNS server (runs in foreground)
 dns-server:
@@ -76,3 +80,27 @@ release version:
     echo ""
     echo "Tag v{{ version }} pushed. GitHub Actions will create the release."
     echo "Watch progress at: https://github.com/$(git remote get-url origin | sed 's/.*github.com[:/]//' | sed 's/.git$//')/actions"
+
+# Install skill to Claude Code
+install-claude skill="dns-troubleshooter":
+    ./install.sh --claude {{skill}}
+
+# Install skill to Codex CLI
+install-codex skill="dns-troubleshooter":
+    ./install.sh --codex {{skill}}
+
+# Install skill to OpenCode
+install-opencode skill="dns-troubleshooter":
+    ./install.sh --opencode {{skill}}
+
+# Install skill to Claude Desktop
+install-desktop skill="dns-troubleshooter":
+    ./install.sh --desktop {{skill}}
+
+# Install skill to GitHub Copilot in a project
+install-copilot skill="dns-troubleshooter" project=".":
+    ./install.sh --copilot {{skill}} {{project}}
+
+# Install skill to all global locations
+install-all skill="dns-troubleshooter":
+    ./install.sh --all {{skill}}
