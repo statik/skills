@@ -21,7 +21,7 @@ just validate
 Or manually:
 
 ```bash
-uvx --from skills-ref agentskills validate dns-troubleshooter
+uvx --from skills-ref agentskills validate skills/dns-troubleshooter
 ```
 
 This checks:
@@ -83,16 +83,19 @@ This repository contains primarily Markdown files (SKILL.md, reference docs) and
 ## File Structure
 
 ```
+.claude-plugin/
+├── marketplace.json        # Plugin marketplace manifest
+└── plugin.json             # Plugin metadata
 skills/
 ├── dns-troubleshooter/     # Example skill
 │   ├── SKILL.md           # Required: skill definition
 │   └── references/        # Optional: reference documentation
-├── evals/                  # InspectAI evaluation suite
-│   ├── dns_skill_eval.py  # Evaluation tasks
-│   ├── dns_server.py      # Test DNS server
-│   └── test_zones.py      # Test data
-├── Justfile               # Development commands
-└── AGENTS.md              # This file
+evals/                      # InspectAI evaluation suite
+├── dns_skill_eval.py       # Evaluation tasks
+├── dns_server.py           # Test DNS server
+└── test_zones.py           # Test data
+Justfile                    # Development commands
+AGENTS.md                   # This file
 ```
 
 ## Creating New Skills

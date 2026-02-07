@@ -1,0 +1,6 @@
+{
+  "name": "dns-troubleshooter",
+  "description": "Diagnose and troubleshoot DNS issues including delegation verification, record conflicts, authoritative vs local DNS comparison, and SPF validation",
+  "version": "1.0.0",
+  "repository": "https://github.com/statik/skills"
+}

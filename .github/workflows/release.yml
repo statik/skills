@@ -25,22 +25,22 @@ jobs:
       - name: Verify version in SKILL.md matches tag
         run: |
           # Extract version from metadata.version in YAML frontmatter
-          SKILL_VERSION=$(grep -A1 '^metadata:' dns-troubleshooter/SKILL.md | grep 'version:' | sed 's/.*version: //')
+          SKILL_VERSION=$(grep -A1 '^metadata:' skills/dns-troubleshooter/SKILL.md | grep 'version:' | sed 's/.*version: //')
           TAG_VERSION=${{ steps.version.outputs.version }}
           if [ "$SKILL_VERSION" != "$TAG_VERSION" ]; then
             echo "Error: Version mismatch!"
             echo "  SKILL.md metadata.version: $SKILL_VERSION"
             echo "  Git tag version: $TAG_VERSION"
-            echo "Please update dns-troubleshooter/SKILL.md metadata.version to match the release tag."
+            echo "Please update skills/dns-troubleshooter/SKILL.md metadata.version to match the release tag."
             exit 1
           fi
           echo "Version verified: $SKILL_VERSION"
 
       - name: Create release zip
         run: |
-          cd dns-troubleshooter
-          zip -r ../dns-troubleshooter-${{ steps.version.outputs.version }}.zip .
-          cd ..
+          cd skills/dns-troubleshooter
+          zip -r ../../dns-troubleshooter-${{ steps.version.outputs.version }}.zip .
+          cd ../..
           echo "Created dns-troubleshooter-${{ steps.version.outputs.version }}.zip"
           unzip -l dns-troubleshooter-${{ steps.version.outputs.version }}.zip
 

@@ -1,0 +1,22 @@
+{
+  "name": "statik-skills",
+  "owner": {
+    "name": "statik",
+    "email": ""
+  },
+  "metadata": {
+    "description": "A collection of skills that extend Claude's capabilities for specialized tasks",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "dns-troubleshooter",
+      "source": ".",
+      "description": "Diagnose and troubleshoot DNS issues including delegation verification, record conflicts, authoritative vs local DNS comparison, and SPF validation",
+      "version": "1.0.0",
+      "license": "MIT",
+      "keywords": ["dns", "networking", "troubleshooting", "spf", "email"],
+      "repository": "https://github.com/statik/skills"
+    }
+  ]
+}

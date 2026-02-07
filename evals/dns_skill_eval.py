@@ -104,7 +104,7 @@ def diagnosis_match():
 DNS_PORT = int(os.environ.get("DNS_TEST_PORT", "5053"))
 
 # Path to the skill
-SKILL_PATH = Path(__file__).parent.parent / "dns-troubleshooter"
+SKILL_PATH = Path(__file__).parent.parent / "skills" / "dns-troubleshooter"
 
 # Timeout for CLI execution (seconds)
 CLI_TIMEOUT = int(os.environ.get("DNS_SKILL_TIMEOUT", "120"))

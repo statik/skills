@@ -7,7 +7,7 @@
     {
       "name": "dns-troubleshooter",
       "version": "1.0.0",
-      "path": "dns-troubleshooter",
+      "path": "skills/dns-troubleshooter",
       "description": "Diagnose and troubleshoot DNS issues including delegation verification, record conflicts, authoritative vs local DNS comparison, and SPF validation",
       "keywords": ["dns", "networking", "troubleshooting", "spf", "email"],
       "platforms": ["claude-code", "opencode", "github-copilot", "claude-desktop"],
