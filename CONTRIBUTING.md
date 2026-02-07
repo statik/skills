@@ -138,7 +138,7 @@ Skills are distributed as versioned zip files via GitHub Releases.
 
 1. **Update the version in SKILL.md**
 
-   Edit `dns-troubleshooter/SKILL.md` and update the `metadata.version` field in the frontmatter:
+   Edit `skills/dns-troubleshooter/SKILL.md` and update the `metadata.version` field in the frontmatter:
    ```yaml
    ---
    name: dns-troubleshooter
@@ -150,7 +150,7 @@ Skills are distributed as versioned zip files via GitHub Releases.
 
 2. **Commit the version bump**
    ```bash
-   git add dns-troubleshooter/SKILL.md
+   git add skills/dns-troubleshooter/SKILL.md
    git commit -m "Bump dns-troubleshooter to v1.1.0"
    git push
    ```

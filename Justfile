@@ -16,7 +16,7 @@ setup:
 
 # Validate all skills using agentskills (from skills-ref package)
 validate:
-    uvx --from skills-ref agentskills validate dns-troubleshooter
+    uvx --from skills-ref agentskills validate skills/dns-troubleshooter
 
 # Run evals using Claude Code CLI with Anthropic API for scoring
 test-claude-anthropic log_dir="" display="":
@@ -55,13 +55,13 @@ release version:
     set -euo pipefail
 
     # Verify version matches SKILL.md metadata.version
-    SKILL_VERSION=$(grep -A1 '^metadata:' dns-troubleshooter/SKILL.md | grep 'version:' | sed 's/.*version: //')
+    SKILL_VERSION=$(grep -A1 '^metadata:' skills/dns-troubleshooter/SKILL.md | grep 'version:' | sed 's/.*version: //')
     if [ "$SKILL_VERSION" != "{{ version }}" ]; then
         echo "Error: Version mismatch!"
         echo "  SKILL.md metadata.version: $SKILL_VERSION"
         echo "  Requested version: {{ version }}"
         echo ""
-        echo "Update dns-troubleshooter/SKILL.md first:"
+        echo "Update skills/dns-troubleshooter/SKILL.md first:"
         echo "  metadata:"
         echo "    version: {{ version }}"
         exit 1
