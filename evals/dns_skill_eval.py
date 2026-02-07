@@ -8,7 +8,7 @@ Implements eval best practices from:
 https://developers.openai.com/blog/eval-skills/
 
 Measures:
-- Outcome goals: Correct diagnosis (model_graded_fact)
+- Outcome goals: Correct diagnosis (diagnosis_match)
 - Process goals: Did Claude use doggo/dig? Query the right server?
 - Style goals: Proper output format
 - Efficiency goals: Minimal commands
@@ -23,6 +23,7 @@ Environment Variables:
 import asyncio
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -33,7 +34,7 @@ from typing import Any
 from inspect_ai import Task, task
 from inspect_ai.dataset import Sample, MemoryDataset
 from inspect_ai.model import ModelOutput, ChatMessageAssistant
-from inspect_ai.scorer import model_graded_fact
+from inspect_ai.scorer import scorer, accuracy, stderr, Score, CORRECT, INCORRECT
 from inspect_ai.solver import Solver, TaskState, solver
 
 from dns_server import TestDNSServer
@@ -47,6 +48,57 @@ from scorers import (
     output_format_check,
     skill_not_triggered,
 )
+
+# Valid diagnosis values the model should output
+VALID_DIAGNOSES = {"valid", "invalid", "warning", "insecure", "incomplete"}
+
+
+@scorer(metrics=[accuracy(), stderr()])
+def diagnosis_match():
+    """Score by matching the diagnosis keyword in the model's response.
+
+    Extracts the diagnosis from the model output and compares it to the
+    expected_diagnosis in sample metadata. No model grading required.
+    """
+
+    async def score(state, target):
+        # Get expected diagnosis from metadata
+        expected = state.metadata.get("expected_diagnosis", "").lower()
+
+        # Extract diagnosis from model output
+        completion = state.output.completion.lower()
+
+        # Look for explicit diagnosis patterns
+        patterns = [
+            r"diagnos(?:is|ed?\s+as)[:\s]+(\w+)",
+            r"status[:\s]+(\w+)",
+            r"conclusion[:\s]+(\w+)",
+        ]
+
+        found_diagnosis = None
+        for pattern in patterns:
+            match = re.search(pattern, completion)
+            if match and match.group(1) in VALID_DIAGNOSES:
+                found_diagnosis = match.group(1)
+                break
+
+        # Fallback: check if any diagnosis keyword appears prominently
+        if not found_diagnosis:
+            for diag in VALID_DIAGNOSES:
+                if diag in completion:
+                    found_diagnosis = diag
+                    break
+
+        is_correct = found_diagnosis == expected
+
+        return Score(
+            value=CORRECT if is_correct else INCORRECT,
+            answer=found_diagnosis or "not found",
+            explanation=f"Expected: {expected}, Found: {found_diagnosis}"
+        )
+
+    return score
+
 
 # Port for the test DNS server
 DNS_PORT = int(os.environ.get("DNS_TEST_PORT", "5053"))
@@ -583,7 +635,7 @@ def dns_troubleshooter_eval() -> Task:
     Main evaluation task for dns-troubleshooter skill using a CLI runner.
 
     Measures:
-    - Outcome: Correct diagnosis (model_graded_fact)
+    - Outcome: Correct diagnosis (diagnosis_match)
     - Process: DNS tool used, test server queried
     - Style: Output format
     - Efficiency: Command count
@@ -599,7 +651,7 @@ def dns_troubleshooter_eval() -> Task:
             select_solver(),
         ],
         scorer=[
-            model_graded_fact(),  # Outcome: correct diagnosis
+            diagnosis_match(),  # Outcome: correct diagnosis
             dns_tool_used(),  # Process: used doggo or dig
             test_server_queried(port=DNS_PORT),  # Process: queried test server
             correct_domain_queried(),  # Process: queried right domain
@@ -622,7 +674,7 @@ def dns_spf_eval() -> Task:
             select_solver(),
         ],
         scorer=[
-            model_graded_fact(),
+            diagnosis_match(),
             dns_tool_used(),
             test_server_queried(port=DNS_PORT),
         ],
@@ -643,7 +695,7 @@ def dns_conflict_eval() -> Task:
             select_solver(),
         ],
         scorer=[
-            model_graded_fact(),
+            diagnosis_match(),
             dns_tool_used(),
             test_server_queried(port=DNS_PORT),
         ],
@@ -669,7 +721,7 @@ def dns_doggo_preference_eval() -> Task:
         ],
         scorer=[
             doggo_preferred(),  # Scores higher for doggo usage
-            model_graded_fact(),
+            diagnosis_match(),
         ],
     )
 
@@ -692,7 +744,7 @@ def dns_explicit_skill_eval() -> Task:
             claude_code_solver(explicit_skill=True),
         ],
         scorer=[
-            model_graded_fact(),
+            diagnosis_match(),
             dns_tool_used(),
             test_server_queried(port=DNS_PORT),
             output_format_check(),
@@ -723,7 +775,7 @@ def dns_negative_control_eval() -> Task:
         ],
         scorer=[
             skill_not_triggered(),  # Should NOT use DNS tools
-            model_graded_fact(),  # For CI compatibility - checks response quality
+            diagnosis_match(),  # For CI compatibility - checks response quality
         ],
     )
 
