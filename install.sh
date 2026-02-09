@@ -6,7 +6,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SKILL_NAME="${2:-dns-troubleshooter}"
-SKILL_PATH="$SCRIPT_DIR/$SKILL_NAME"
+SKILL_PATH="$SCRIPT_DIR/skills/$SKILL_NAME"
 
 # Colors for output
 RED='\033[0;31m'
