@@ -187,9 +187,7 @@ Claude will use the skill's knowledge and workflows to help diagnose and resolve
 
 ## Evaluation Results
 
-Skills are evaluated using [InspectAI](https://inspect.aisi.org.uk/). View the latest evaluation results at:
-
-https://statik.github.io/skills/
+Skills are evaluated using [InspectAI](https://inspect.aisi.org.uk/). View the latest evaluation results on the [evals dashboard](https://statik.github.io/skills/).
 
 ## Contributing
 
