@@ -74,6 +74,7 @@ jobs:
           if [ -z "$ANTHROPIC_API_KEY" ]; then
             echo "::warning::ANTHROPIC_API_KEY secret is not set. Evals will be skipped."
             echo "SKIP_EVALS=true" >> $GITHUB_ENV
+            echo "SKIP_EVALS_REASON=not_configured" >> $GITHUB_ENV
             exit 0
           fi
 
@@ -95,21 +96,25 @@ jobs:
           elif [ "$HTTP_STATUS" -eq 401 ]; then
             echo "::error::ANTHROPIC_API_KEY is invalid (HTTP 401). Please update the secret."
             echo "SKIP_EVALS=true" >> $GITHUB_ENV
+            echo "SKIP_EVALS_REASON=invalid_key" >> $GITHUB_ENV
             exit 1
           elif [ "$HTTP_STATUS" -eq 403 ]; then
             echo "::error::ANTHROPIC_API_KEY is forbidden (HTTP 403). The key may be disabled."
             echo "SKIP_EVALS=true" >> $GITHUB_ENV
+            echo "SKIP_EVALS_REASON=forbidden" >> $GITHUB_ENV
             exit 1
           elif [ "$HTTP_STATUS" -eq 429 ]; then
             # Extract error message for details (rate limit vs out of credit)
             ERROR_MSG=$(echo "$HTTP_BODY" | python3 -c "import sys,json; print(json.load(sys.stdin).get('error',{}).get('message','Unknown error'))" 2>/dev/null || echo "Rate limited")
             echo "::error::Anthropic API rate limited or out of credit (HTTP 429): $ERROR_MSG"
             echo "SKIP_EVALS=true" >> $GITHUB_ENV
+            echo "SKIP_EVALS_REASON=rate_limited_or_out_of_credit" >> $GITHUB_ENV
             exit 1
           else
             ERROR_MSG=$(echo "$HTTP_BODY" | python3 -c "import sys,json; print(json.load(sys.stdin).get('error',{}).get('message','Unknown error'))" 2>/dev/null || echo "$HTTP_BODY")
             echo "::error::Anthropic API key validation failed (HTTP $HTTP_STATUS): $ERROR_MSG"
             echo "SKIP_EVALS=true" >> $GITHUB_ENV
+            echo "SKIP_EVALS_REASON=api_error" >> $GITHUB_ENV
             exit 1
           fi
 
@@ -158,9 +163,23 @@ jobs:
 
           # Check if evals were skipped
           if os.environ.get("SKIP_EVALS") == "true":
+              reason = os.environ.get("SKIP_EVALS_REASON", "unknown")
               summary = "## DNS Troubleshooter Eval Results\n\n"
-              summary += "**Status:** Skipped (ANTHROPIC_API_KEY not configured)\n\n"
-              summary += "To run evals, add the `ANTHROPIC_API_KEY` secret to this repository.\n"
+              if reason == "not_configured":
+                  summary += "**Status:** Skipped (ANTHROPIC_API_KEY not configured)\n\n"
+                  summary += "To run evals, add the `ANTHROPIC_API_KEY` secret to this repository.\n"
+              elif reason == "invalid_key":
+                  summary += "**Status:** Skipped (ANTHROPIC_API_KEY is invalid)\n\n"
+                  summary += "The API key returned a 401 error. Please update the `ANTHROPIC_API_KEY` secret with a valid key.\n"
+              elif reason == "forbidden":
+                  summary += "**Status:** Skipped (ANTHROPIC_API_KEY is disabled)\n\n"
+                  summary += "The API key returned a 403 error. The key may be disabled. Please check the key status in the Anthropic console.\n"
+              elif reason == "rate_limited_or_out_of_credit":
+                  summary += "**Status:** Skipped (Anthropic API rate limited or out of credit)\n\n"
+                  summary += "The API key is valid but the request was rejected (HTTP 429). This usually means the account is out of credit or temporarily rate limited. Please check your billing and usage in the [Anthropic console](https://console.anthropic.com/).\n"
+              else:
+                  summary += "**Status:** Skipped (API key validation failed)\n\n"
+                  summary += "The Anthropic API returned an unexpected error. Check the workflow logs for details.\n"
               with open(os.environ.get("GITHUB_STEP_SUMMARY", "summary.md"), "a") as f:
                   f.write(summary)
               with open("summary.md", "w") as f:
