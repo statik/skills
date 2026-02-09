@@ -327,3 +327,21 @@ jobs:
           body-path: evals/summary.md
           comment-id: ${{ steps.find-comment.outputs.comment-id }}
           edit-mode: replace
+
+      - name: Find existing comment (cleanup)
+        if: github.event_name == 'pull_request' && github.event.action == 'closed'
+        uses: peter-evans/find-comment@v3
+        id: find-comment-cleanup
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          body-includes: "## DNS Troubleshooter Eval Results"
+
+      - name: Update PR comment after merge
+        if: github.event_name == 'pull_request' && github.event.action == 'closed' && steps.find-comment-cleanup.outputs.comment-id != ''
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          comment-id: ${{ steps.find-comment-cleanup.outputs.comment-id }}
+          body: |
+            ---
+            > **Note:** The PR preview has been removed following merge. View the latest eval results on the [main evals dashboard](https://statik.github.io/skills/).
+          edit-mode: append
