@@ -299,7 +299,7 @@ jobs:
               owner = parts[0]
               repo_name = parts[1]
               preview_url = f"https://{owner}.github.io/{repo_name}/pr-preview/pr-{pr_number}/"
-              summary += f"\n**[View full interactive eval results]({preview_url})**\n"
+              summary += f"\n**[PR preview: View full interactive eval results]({preview_url})**\n"
 
           # Write to GitHub Actions summary
           with open(os.environ.get("GITHUB_STEP_SUMMARY", "/dev/null"), "a") as f:
