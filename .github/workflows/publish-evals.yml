@@ -3,9 +3,14 @@ name: Publish Eval Results
 on:
   push:
     branches: [main]
+    paths:
+      - 'skills/**'
+      - 'evals/**'
+      - 'Justfile'
   workflow_dispatch:
 
 permissions:
+  actions: read
   contents: write
   pages: write
   id-token: write
@@ -38,7 +43,89 @@ jobs:
       - name: Install Claude Code CLI
         run: npm install -g @anthropic-ai/claude-code
 
+      - name: Fetch previous logs from gh-pages
+        run: |
+          mkdir -p evals/logs
+          # Check if gh-pages branch exists
+          if git ls-remote --heads origin gh-pages | grep -q gh-pages; then
+            echo "Fetching previous logs from gh-pages branch..."
+            git fetch origin gh-pages
+            # Extract logs from gh-pages branch if they exist
+            if git show origin/gh-pages:logs 2>/dev/null; then
+              git checkout origin/gh-pages -- logs/ 2>/dev/null || true
+              if [ -d "logs" ]; then
+                mv logs/* evals/logs/ 2>/dev/null || true
+                rm -rf logs
+              fi
+            fi
+            echo "Found $(ls -1 evals/logs/*.eval 2>/dev/null | wc -l) previous log files"
+          else
+            echo "No gh-pages branch yet, starting fresh"
+          fi
+
+      - name: Try to download eval artifacts from merged PR
+        id: pr-artifacts
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "Checking if this push is from a merged PR..."
+
+          # Find PR associated with this merge commit
+          PR_NUMBER=$(gh api "/repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" \
+            --jq '.[0].number' 2>/dev/null || echo "")
+
+          if [ -z "$PR_NUMBER" ]; then
+            echo "No PR found for commit $GITHUB_SHA, will run evals fresh"
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Found merged PR #$PR_NUMBER"
+
+          # Get the PR's head branch to find the workflow run
+          PR_BRANCH=$(gh pr view "$PR_NUMBER" --json headRefName --jq '.headRefName')
+          echo "PR head branch: $PR_BRANCH"
+
+          # Find the most recent successful run of validate-skills.yml for that branch
+          RUN_ID=$(gh run list \
+            --workflow validate-skills.yml \
+            --branch "$PR_BRANCH" \
+            --status completed \
+            --limit 5 \
+            --json databaseId,conclusion \
+            --jq '[.[] | select(.conclusion=="success")] | .[0].databaseId')
+
+          if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
+            echo "No successful workflow run found for PR #$PR_NUMBER, will run evals fresh"
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Found workflow run: $RUN_ID"
+
+          # Try to download the eval artifacts
+          mkdir -p ./pr-eval-artifacts
+          if gh run download "$RUN_ID" --name inspect-eval-logs --dir ./pr-eval-artifacts; then
+            # Check if we actually got eval log files
+            if compgen -G "./pr-eval-artifacts/evals/logs/*.eval" > /dev/null 2>&1; then
+              EVAL_COUNT=$(ls -1 ./pr-eval-artifacts/evals/logs/*.eval | wc -l)
+              echo "Successfully downloaded $EVAL_COUNT eval log(s) from PR #$PR_NUMBER (run $RUN_ID)"
+              cp ./pr-eval-artifacts/evals/logs/*.eval evals/logs/
+              echo "found=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "Artifact downloaded but no .eval files found, will run evals fresh"
+              echo "found=false" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "Failed to download artifacts from run $RUN_ID, will run evals fresh"
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          rm -rf ./pr-eval-artifacts
+
       - name: Check API key
+        if: steps.pr-artifacts.outputs.found != 'true'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
@@ -76,27 +163,8 @@ jobs:
             exit 1
           fi
 
-      - name: Fetch previous logs from gh-pages
-        run: |
-          mkdir -p evals/logs
-          # Check if gh-pages branch exists
-          if git ls-remote --heads origin gh-pages | grep -q gh-pages; then
-            echo "Fetching previous logs from gh-pages branch..."
-            git fetch origin gh-pages
-            # Extract logs from gh-pages branch if they exist
-            if git show origin/gh-pages:logs 2>/dev/null; then
-              git checkout origin/gh-pages -- logs/ 2>/dev/null || true
-              if [ -d "logs" ]; then
-                mv logs/* evals/logs/ 2>/dev/null || true
-                rm -rf logs
-              fi
-            fi
-            echo "Found $(ls -1 evals/logs/*.eval 2>/dev/null | wc -l) previous log files"
-          else
-            echo "No gh-pages branch yet, starting fresh"
-          fi
-
       - name: Run InspectAI evals
+        if: steps.pr-artifacts.outputs.found != 'true'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |

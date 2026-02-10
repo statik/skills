@@ -4,8 +4,6 @@ on:
   pull_request:
     branches: [main]
     types: [opened, reopened, synchronize, closed]
-  push:
-    branches: [main]
 
 permissions:
   contents: write
@@ -40,34 +38,66 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install just
+      - name: Check for relevant changes
         if: github.event.action != 'closed'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          # Get list of files changed in this PR
+          CHANGED_FILES=$(gh pr diff "$PR_NUMBER" --name-only)
+
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+
+          # Check if any relevant files changed (skills/, evals/, or Justfile)
+          if echo "$CHANGED_FILES" | grep -qE '^(skills/|evals/|Justfile$)'; then
+            echo "Relevant changes detected, evals will run"
+          else
+            echo "No relevant changes to skills/, evals/, or Justfile — skipping evals"
+            echo "SKIP_EVALS=true" >> "$GITHUB_ENV"
+            echo "SKIP_EVALS_REASON=no_relevant_changes" >> "$GITHUB_ENV"
+
+            # Write summary for PR comment and GitHub Actions summary
+            mkdir -p evals
+            cat > evals/summary.md << 'SUMMARY'
+          ## DNS Troubleshooter Eval Results
+
+          **Status:** Skipped (no relevant changes)
+
+          No changes to `skills/`, `evals/`, or `Justfile` were detected. Evals are not needed for this PR.
+          SUMMARY
+            cat evals/summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Install just
+        if: env.SKIP_EVALS != 'true' && github.event.action != 'closed'
         uses: extractions/setup-just@v2
 
       - name: Install uv
-        if: github.event.action != 'closed'
+        if: env.SKIP_EVALS != 'true' && github.event.action != 'closed'
         uses: astral-sh/setup-uv@v5
 
       - name: Set up Python
-        if: github.event.action != 'closed'
+        if: env.SKIP_EVALS != 'true' && github.event.action != 'closed'
         run: uv python install 3.11
 
       - name: Install dependencies
-        if: github.event.action != 'closed'
+        if: env.SKIP_EVALS != 'true' && github.event.action != 'closed'
         run: just setup
 
       - name: Set up Node.js
-        if: github.event.action != 'closed'
+        if: env.SKIP_EVALS != 'true' && github.event.action != 'closed'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
       - name: Install Claude Code CLI
-        if: github.event.action != 'closed'
+        if: env.SKIP_EVALS != 'true' && github.event.action != 'closed'
         run: npm install -g @anthropic-ai/claude-code
 
       - name: Check API key
-        if: github.event.action != 'closed'
+        if: env.SKIP_EVALS != 'true' && github.event.action != 'closed'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
@@ -149,7 +179,7 @@ jobs:
           comment: false
 
       - name: Parse and summarize eval results
-        if: always() && github.event.action != 'closed'
+        if: always() && env.SKIP_EVALS_REASON != 'no_relevant_changes' && github.event.action != 'closed'
         working-directory: evals
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
