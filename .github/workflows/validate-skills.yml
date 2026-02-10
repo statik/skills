@@ -4,8 +4,10 @@ on:
   pull_request:
     branches: [main]
     types: [opened, reopened, synchronize, closed]
-  push:
-    branches: [main]
+    paths:
+      - 'skills/**'
+      - 'evals/**'
+      - 'Justfile'
 
 permissions:
   contents: write
