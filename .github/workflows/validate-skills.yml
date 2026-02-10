@@ -266,9 +266,17 @@ jobs:
               status = log_data.get("status", "unknown")
               error = log_data.get("error", None)
 
+          def get_primary_value(sample):
+              """Get the value from the first (primary) scorer for a sample."""
+              scores = sample.get("scores", {})
+              if not scores:
+                  return "?"
+              first_score = next(iter(scores.values()))
+              return first_score.get("value", "?")
+
           total = len(samples)
-          correct = sum(1 for s in samples if s.get("scores", {}).get("model_graded_fact", {}).get("value") == "C")
-          incorrect = sum(1 for s in samples if s.get("scores", {}).get("model_graded_fact", {}).get("value") == "I")
+          correct = sum(1 for s in samples if get_primary_value(s) == "C")
+          incorrect = sum(1 for s in samples if get_primary_value(s) == "I")
           errored = sum(1 for s in samples if s.get("error"))
 
           # Build summary
@@ -307,8 +315,7 @@ jobs:
                   if sample_error:
                       result_icon = "Error"
                   else:
-                      score = sample.get("scores", {}).get("model_graded_fact", {})
-                      value = score.get("value", "?")
+                      value = get_primary_value(sample)
 
                       if value == "C":
                           result_icon = "PASS"
