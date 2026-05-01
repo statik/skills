@@ -7,6 +7,7 @@ A collection of skills that extend Claude's capabilities for specialized tasks.
 | Skill | Description |
 |-------|-------------|
 | [dns-troubleshooter](./skills/dns-troubleshooter/) | *It's not DNS / There's no way it's DNS / It was DNS.* Diagnose DNS issues including delegation verification, SPF validation, record conflicts, and authoritative vs local DNS comparison |
+| [design-memo](./skills/design-memo/) | Produce polished, self-contained HTML design memos with Tufte-inspired layout and scrollytelling — the default output for any plan, design, or architecture proposal |
 
 > **Copilot Compatible:** All skills in this repository work with both Claude and GitHub Copilot (December 2025+).
 

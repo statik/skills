@@ -17,6 +17,15 @@
       "license": "MIT",
       "keywords": ["dns", "networking", "troubleshooting", "spf", "email"],
       "repository": "https://github.com/statik/skills"
+    },
+    {
+      "name": "design-memo",
+      "source": "./",
+      "description": "Produce polished, self-contained HTML design memos with Tufte-inspired editorial layout and scrollytelling interaction for any plan, design, or architecture proposal",
+      "version": "1.0.0",
+      "license": "MIT",
+      "keywords": ["design", "architecture", "plan", "presentation", "html", "tufte", "scrollytelling"],
+      "repository": "https://github.com/statik/skills"
     }
   ]
 }

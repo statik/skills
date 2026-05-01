@@ -15,6 +15,17 @@
         "skill": "SKILL.md",
         "references": ["references/spf.md"]
       }
+    },
+    {
+      "name": "design-memo",
+      "version": "1.0.0",
+      "path": "skills/design-memo",
+      "description": "Produce polished, self-contained HTML design memos with Tufte-inspired editorial layout and scrollytelling interaction for any plan, design, or architecture proposal",
+      "keywords": ["design", "architecture", "plan", "presentation", "html", "tufte", "scrollytelling"],
+      "platforms": ["claude-code", "opencode", "github-copilot", "claude-desktop"],
+      "files": {
+        "skill": "SKILL.md"
+      }
     }
   ],
   "metadata": {

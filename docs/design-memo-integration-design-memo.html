@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Design Memo — Integrating the design-memo Skill</title>
+  <style>
+    :root {
+      --paper: #cfd4cf;
+      --paper-deep: #7f8985;
+      --panel: #e6e6df;
+      --ink: #171c1d;
+      --muted: #4a5250;
+      --olive: #4a4f3f;
+      --amber: #9a7a55;
+      --ochre: #b79b65;
+      --mustard: #d6c7a4;
+      --teal: #2f5557;
+      --blue: #5f7f86;
+      --line: #9aa39d;
+      --code: #111819;
+      --code-bg: #bdc8c3;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: Georgia, "Times New Roman", serif;
+      background: var(--paper);
+      color: var(--ink);
+      line-height: 1.7;
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
+    }
+
+    /* Progress bar */
+    #progress {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 3px;
+      background: var(--teal);
+      width: 0%;
+      z-index: 100;
+      transition: width 80ms linear;
+    }
+
+    /* Section rail */
+    #rail {
+      position: fixed;
+      right: 1.5rem;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      z-index: 90;
+    }
+
+    #rail button {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      border: 2px solid var(--line);
+      background: transparent;
+      cursor: pointer;
+      padding: 0;
+      position: relative;
+      transition: background 0.2s, border-color 0.2s;
+    }
+
+    #rail button:focus-visible {
+      outline: 2px solid var(--teal);
+      outline-offset: 2px;
+    }
+
+    #rail button[aria-current="step"] {
+      background: var(--teal);
+      border-color: var(--teal);
+    }
+
+    #rail button .label {
+      position: absolute;
+      right: 1.25rem;
+      top: 50%;
+      transform: translateY(-50%);
+      white-space: nowrap;
+      font-size: 0.75rem;
+      color: var(--muted);
+      opacity: 0;
+      transition: opacity 0.15s;
+      pointer-events: none;
+    }
+
+    #rail button:hover .label,
+    #rail button:focus .label {
+      opacity: 1;
+    }
+
+    /* Chapter indicator */
+    #chapter {
+      position: sticky;
+      top: 0.5rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+      padding: 0.25rem 0;
+      z-index: 80;
+      background: var(--paper);
+    }
+
+    /* Hero */
+    .hero {
+      margin: 2rem 0 3rem;
+      padding-bottom: 2rem;
+      border-bottom: 3px solid var(--ink);
+    }
+
+    .hero h1 {
+      font-size: 2.4rem;
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+      margin-bottom: 0.5rem;
+    }
+
+    .hero .subtitle {
+      font-size: 1.1rem;
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    .hero .meta {
+      margin-top: 1rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    /* Sections */
+    section {
+      margin: 3rem 0;
+      opacity: 0.4;
+      transition: opacity 0.4s ease;
+    }
+
+    section.active { opacity: 1; }
+
+    section h2 {
+      font-size: 1.5rem;
+      border-bottom: 2px solid var(--line);
+      padding-bottom: 0.25rem;
+      margin-bottom: 1rem;
+      color: var(--ink);
+    }
+
+    section h3 {
+      font-size: 1.1rem;
+      color: var(--olive);
+      margin: 1.5rem 0 0.5rem;
+    }
+
+    p { margin-bottom: 1rem; }
+
+    /* Margin notes */
+    .margin-note {
+      float: right;
+      clear: right;
+      width: 200px;
+      margin-right: -240px;
+      font-size: 0.8rem;
+      color: var(--muted);
+      border-left: 2px solid var(--line);
+      padding-left: 0.5rem;
+    }
+
+    /* Inline note (fallback for narrow screens) */
+    .inline-note {
+      display: none;
+      background: var(--panel);
+      border-left: 3px solid var(--ochre);
+      padding: 0.5rem 0.75rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin: 0.75rem 0;
+    }
+
+    /* Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0;
+      font-size: 0.9rem;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 0.5rem 0.75rem;
+      border-bottom: 1px solid var(--line);
+    }
+
+    th {
+      border-bottom: 2px solid var(--ink);
+      font-weight: 700;
+    }
+
+    tr:last-child td { border-bottom: 2px solid var(--line); }
+
+    td code {
+      background: var(--code-bg);
+      padding: 0.1rem 0.3rem;
+      font-size: 0.82rem;
+    }
+
+    /* Code */
+    pre {
+      background: var(--code-bg);
+      color: var(--code);
+      padding: 1rem;
+      overflow-x: auto;
+      font-size: 0.82rem;
+      border-left: 3px solid var(--olive);
+      margin: 1rem 0;
+      line-height: 1.5;
+    }
+
+    code {
+      font-family: "SF Mono", "Cascadia Code", "Fira Code", monospace;
+    }
+
+    /* Lists */
+    ul, ol {
+      margin: 0.75rem 0 1rem 1.25rem;
+    }
+
+    li { margin-bottom: 0.35rem; }
+
+    /* Callout */
+    .callout {
+      background: var(--panel);
+      border-left: 4px solid var(--teal);
+      padding: 1rem 1.25rem;
+      margin: 1.5rem 0;
+      font-size: 0.92rem;
+    }
+
+    .callout strong {
+      color: var(--teal);
+      display: block;
+      margin-bottom: 0.25rem;
+    }
+
+    /* Status badge */
+    .badge {
+      display: inline-block;
+      padding: 0.15rem 0.5rem;
+      border-radius: 3px;
+      font-size: 0.78rem;
+      font-family: "SF Mono", monospace;
+      letter-spacing: 0.03em;
+    }
+
+    .badge-new { background: var(--teal); color: var(--panel); }
+    .badge-edit { background: var(--ochre); color: var(--ink); }
+    .badge-delete { background: var(--olive); color: var(--mustard); }
+
+    /* Print */
+    @media print {
+      #progress, #rail, #chapter { display: none; }
+      section { opacity: 1; break-inside: avoid; }
+      .margin-note { float: none; width: auto; margin: 0.5rem 0; border-left: none; padding-left: 0; font-style: italic; }
+    }
+
+    /* Small screens */
+    @media (max-width: 720px) {
+      #rail { display: none; }
+      .margin-note { display: none; }
+      .inline-note { display: block; }
+      body { padding: 1rem 1rem 3rem; }
+      .hero h1 { font-size: 1.6rem; }
+    }
+
+    /* Reduced motion */
+    @media (prefers-reduced-motion: reduce) {
+      section { transition: none; }
+      #progress { transition: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <div id="progress" role="progressbar"
+       aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+
+  <div id="chapter" aria-live="polite"></div>
+
+  <header class="hero">
+    <h1>Integrating the design-memo Skill</h1>
+    <p class="subtitle">
+      A new default output format for plans, designs, and architecture proposals.
+    </p>
+    <p class="meta">
+      statik/skills &middot; May 2026 &middot; 8 files changed, 27 insertions(+), 2 deletions(-)
+    </p>
+  </header>
+
+  <section>
+    <h2>1. Design Thesis</h2>
+
+    <p>
+      Every plan deserves a format that reviewers can scan, navigate, and share
+      without reading a chat transcript. The <strong>design-memo</strong> skill
+      makes self-contained HTML design memos the default output for any
+      non-trivial plan, architecture proposal, or decision record produced by
+      Claude.
+    </p>
+
+    <div class="margin-note">
+      The skill asks before generating HTML for simple plans &mdash; it is a
+      default, not a mandate.
+    </div>
+    <div class="inline-note">
+      The skill asks before generating HTML for simple plans &mdash; it is a
+      default, not a mandate.
+    </div>
+
+    <p>
+      The visual language is Tufte-inspired editorial layout with a cinematic
+      Arrival palette: foggy slate backgrounds, charcoal ink, muted olive and
+      amber structure, and blue-gray accents for technical emphasis. Lightweight
+      scrollytelling (progress bar, section rail, chapter indicator) gives the
+      document presentation-like affordances while remaining a readable
+      long-form memo.
+    </p>
+
+    <p>
+      This document is itself produced by the skill &mdash; a proof of concept
+      for reviewers to evaluate the format alongside the integration changes.
+    </p>
+  </section>
+
+  <section>
+    <h2>2. What Changed</h2>
+
+    <table>
+      <thead>
+        <tr>
+          <th>File</th>
+          <th>Action</th>
+          <th>Purpose</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>skills/design-memo/SKILL.md</code></td>
+          <td><span class="badge badge-new">new</span></td>
+          <td>Skill definition: instructions, palette, accessibility, HTML skeleton</td>
+        </tr>
+        <tr>
+          <td><code>manifest.json</code></td>
+          <td><span class="badge badge-edit">edit</span></td>
+          <td>Register design-memo in the skills array</td>
+        </tr>
+        <tr>
+          <td><code>Justfile</code></td>
+          <td><span class="badge badge-edit">edit</span></td>
+          <td>Add design-memo to the <code>validate</code> recipe</td>
+        </tr>
+        <tr>
+          <td><code>README.md</code></td>
+          <td><span class="badge badge-edit">edit</span></td>
+          <td>Add row to Available Skills table</td>
+        </tr>
+        <tr>
+          <td><code>.claude-plugin/marketplace.json</code></td>
+          <td><span class="badge badge-edit">edit</span></td>
+          <td>Add design-memo to plugins array</td>
+        </tr>
+        <tr>
+          <td><code>.claude-plugin/plugin.json</code></td>
+          <td><span class="badge badge-edit">edit</span></td>
+          <td>Broaden description to cover multiple skills</td>
+        </tr>
+        <tr>
+          <td><code>AGENTS.md</code></td>
+          <td><span class="badge badge-edit">edit</span></td>
+          <td>Add design-memo to file structure and validation examples</td>
+        </tr>
+        <tr>
+          <td><code>planning-presentation-skill.md</code></td>
+          <td><span class="badge badge-delete">delete</span></td>
+          <td>Draft superseded by <code>skills/design-memo/SKILL.md</code></td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>3. Key Design Decisions</h2>
+
+    <h3>Trigger scope: default with an escape hatch</h3>
+    <p>
+      The skill activates for any plan or design request. For simple plans
+      (single-step fixes, quick answers), it asks the user whether they prefer
+      plain text. This avoids both extremes: ignoring the skill for small tasks
+      and forcing a full HTML document for a two-line fix.
+    </p>
+
+    <h3>Output location: docs/ preferred</h3>
+    <p>
+      HTML memos are placed in a <code>docs/</code> subdirectory if one exists.
+      If not, the skill asks before creating one, falling back to the current
+      directory. This keeps project roots clean without imposing structure on
+      repos that don't have a docs convention.
+    </p>
+
+    <h3>CSS variable renames</h3>
+    <p>
+      The original draft used <code>--red</code> for an olive green
+      (<code>#4a4f3f</code>) and <code>--rose</code> for an amber
+      (<code>#9a7a55</code>). These names now match their actual colors:
+      <code>--olive</code> and <code>--amber</code>. Hex values are unchanged.
+    </p>
+
+    <div class="margin-note">
+      Semantic variable names prevent mistakes when extending the palette or
+      building conditional styles.
+    </div>
+    <div class="inline-note">
+      Semantic variable names prevent mistakes when extending the palette or
+      building conditional styles.
+    </div>
+
+    <h3>Palette contrast fix</h3>
+    <p>
+      <code>--muted</code> was darkened from <code>#65706f</code> to
+      <code>#4a5250</code> to meet WCAG 2.1 AA (4.5:1 against
+      <code>--paper: #cfd4cf</code>). The skill also notes that
+      <code>--muted</code> is for secondary text only &mdash; essential content
+      must use <code>--ink</code>.
+    </p>
+
+    <h3>plugin.json: description only</h3>
+    <p>
+      The <code>name</code> field in <code>plugin.json</code> was left as
+      <code>dns-troubleshooter</code> to avoid breaking existing installations.
+      Only the <code>description</code> was broadened to acknowledge the
+      collection now has multiple skills.
+    </p>
+  </section>
+
+  <section>
+    <h2>4. Skill Structure</h2>
+
+    <p>
+      The SKILL.md follows the Agent Skills Specification and mirrors the
+      patterns established by dns-troubleshooter. Key sections:
+    </p>
+
+    <pre><code>skills/design-memo/
+  SKILL.md          # YAML frontmatter + 13 instruction sections</code></pre>
+
+    <p>The instruction sections, in order:</p>
+
+    <ol>
+      <li><strong>Purpose</strong> &mdash; when and why to produce an HTML memo</li>
+      <li><strong>Output</strong> &mdash; self-contained, inline CSS/JS only</li>
+      <li><strong>Output Location</strong> &mdash; docs/ preferred, ask if missing</li>
+      <li><strong>Output File Naming</strong> &mdash; <code>&lt;topic&gt;-design-memo.html</code></li>
+      <li><strong>Visual Direction</strong> &mdash; Tufte layout, cinematic palette</li>
+      <li><strong>Default Palette Variables</strong> &mdash; 14 CSS custom properties</li>
+      <li><strong>Scrollytelling Interaction</strong> &mdash; progress bar, rail, chapter indicator</li>
+      <li><strong>Accessibility</strong> &mdash; WCAG AA, ARIA, keyboard nav, reduced motion</li>
+      <li><strong>Content Structure</strong> &mdash; 7-part technical design template</li>
+      <li><strong>Code Listings</strong> &mdash; inline highlighting, draft labels</li>
+      <li><strong>Review Quality Bar</strong> &mdash; caveats surfaced, test cases included</li>
+      <li><strong>HTML Implementation Notes</strong> &mdash; semantic sections, CSS properties, no-JS fallback</li>
+      <li><strong>HTML Skeleton</strong> &mdash; complete starter template (~200 lines)</li>
+    </ol>
+
+    <div class="callout">
+      <strong>No evals yet.</strong>
+      HTML presentation quality is hard to score automatically. A future
+      enhancement could use a headless browser to verify structural correctness
+      (sections present, CSS variables defined, no broken JS), but that is out
+      of scope for the initial integration.
+    </div>
+  </section>
+
+  <section>
+    <h2>5. Accessibility Provisions</h2>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Requirement</th>
+          <th>Implementation</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Color contrast</td>
+          <td>All text meets WCAG 2.1 AA (4.5:1 body, 3:1 large). <code>--muted</code> darkened to comply.</td>
+        </tr>
+        <tr>
+          <td>Keyboard navigation</td>
+          <td>Rail dots are <code>&lt;button&gt;</code> elements with <code>:focus-visible</code> outlines.</td>
+        </tr>
+        <tr>
+          <td>Screen readers</td>
+          <td><code>role="navigation"</code> on rail, <code>role="progressbar"</code> with aria-value* on progress, <code>aria-current="step"</code> on active dot, <code>aria-live="polite"</code> on chapter indicator.</td>
+        </tr>
+        <tr>
+          <td>Reduced motion</td>
+          <td><code>prefers-reduced-motion</code> media query disables transitions.</td>
+        </tr>
+        <tr>
+          <td>No-JS fallback</td>
+          <td>All content visible in document order. JS adds interactivity only.</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>6. What Was Not Changed</h2>
+
+    <table>
+      <thead>
+        <tr>
+          <th>File</th>
+          <th>Reason</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>install.sh</code></td>
+          <td>Already skill-agnostic; accepts skill name as argument.</td>
+        </tr>
+        <tr>
+          <td><code>release.yml</code></td>
+          <td>Hardcoded to dns-troubleshooter. Needs future work for multi-skill releases, but out of scope here.</td>
+        </tr>
+        <tr>
+          <td><code>evals/</code></td>
+          <td>No automated evals for design-memo initially.</td>
+        </tr>
+        <tr>
+          <td><code>CONTRIBUTING.md</code></td>
+          <td>Generic enough; no skill-specific content that needs updating.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="margin-note">
+      The release workflow is the most notable gap. When design-memo needs
+      versioned releases, release.yml will need to be parameterized or split
+      per skill.
+    </div>
+    <div class="inline-note">
+      The release workflow is the most notable gap. When design-memo needs
+      versioned releases, release.yml will need to be parameterized or split
+      per skill.
+    </div>
+  </section>
+
+  <section>
+    <h2>7. Confidence &amp; Caveats</h2>
+
+    <ul>
+      <li>
+        <strong>High confidence:</strong> The skill validates, follows all
+        existing patterns, and the HTML skeleton produces a working document
+        (this memo is evidence).
+      </li>
+      <li>
+        <strong>Medium confidence:</strong> The trigger scope ("default for
+        plans, ask for simple ones") requires judgment from the agent. Edge
+        cases will surface with use &mdash; the phrasing may need tuning.
+      </li>
+      <li>
+        <strong>Known gap:</strong> No automated evals. Quality depends on
+        manual review until a structural eval is built.
+      </li>
+      <li>
+        <strong>Known gap:</strong> <code>release.yml</code> only handles
+        dns-troubleshooter. A future PR should make it multi-skill-aware.
+      </li>
+      <li>
+        <strong>Palette note:</strong> The <code>--muted</code> color was
+        adjusted for contrast. If the original lighter shade is preferred for
+        decorative elements, a separate <code>--muted-light</code> variable
+        could be added later.
+      </li>
+    </ul>
+  </section>
+
+  <nav id="rail" role="navigation" aria-label="Section navigation"></nav>
+
+  <script>
+    (function () {
+      var sections = document.querySelectorAll("section");
+      var rail = document.getElementById("rail");
+      var progress = document.getElementById("progress");
+      var chapter = document.getElementById("chapter");
+
+      /* Build rail dots */
+      sections.forEach(function (sec, i) {
+        var heading = sec.querySelector("h2");
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.setAttribute("aria-label", heading ? heading.textContent : "Section " + (i + 1));
+        var label = document.createElement("span");
+        label.className = "label";
+        label.textContent = heading ? heading.textContent : "Section " + (i + 1);
+        btn.appendChild(label);
+        btn.addEventListener("click", function () {
+          sec.scrollIntoView({ behavior: "smooth" });
+        });
+        rail.appendChild(btn);
+      });
+
+      var dots = rail.querySelectorAll("button");
+
+      function onScroll() {
+        /* Progress bar */
+        var scrollTop = window.scrollY;
+        var docHeight = document.documentElement.scrollHeight - window.innerHeight;
+        var pct = docHeight > 0 ? Math.round((scrollTop / docHeight) * 100) : 0;
+        progress.style.width = pct + "%";
+        progress.setAttribute("aria-valuenow", pct);
+
+        /* Active section */
+        var current = 0;
+        sections.forEach(function (sec, i) {
+          var rect = sec.getBoundingClientRect();
+          if (rect.top <= window.innerHeight * 0.4) current = i;
+        });
+
+        sections.forEach(function (sec, i) {
+          sec.classList.toggle("active", i === current);
+        });
+
+        dots.forEach(function (dot, i) {
+          if (i === current) {
+            dot.setAttribute("aria-current", "step");
+          } else {
+            dot.removeAttribute("aria-current");
+          }
+        });
+
+        /* Chapter indicator */
+        var heading = sections[current] && sections[current].querySelector("h2");
+        if (heading) chapter.textContent = heading.textContent;
+      }
+
+      window.addEventListener("scroll", onScroll, { passive: true });
+      onScroll();
+    })();
+  </script>
+
+</body>
+</html>

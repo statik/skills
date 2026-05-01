@@ -17,6 +17,7 @@ setup:
 # Validate all skills using agentskills (from skills-ref package)
 validate:
     uvx --from skills-ref agentskills validate skills/dns-troubleshooter
+    uvx --from skills-ref agentskills validate skills/design-memo
 
 # Run evals using Claude Code CLI with Anthropic API for scoring
 test-claude-anthropic log_dir="" display="":
