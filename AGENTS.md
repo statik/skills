@@ -22,6 +22,7 @@ Or manually:
 
 ```bash
 uvx --from skills-ref agentskills validate skills/dns-troubleshooter
+uvx --from skills-ref agentskills validate skills/design-memo
 ```
 
 This checks:
@@ -87,9 +88,11 @@ This repository contains primarily Markdown files (SKILL.md, reference docs) and
 ├── marketplace.json        # Plugin marketplace manifest
 └── plugin.json             # Plugin metadata
 skills/
-├── dns-troubleshooter/     # Example skill
+├── dns-troubleshooter/     # DNS troubleshooting skill
 │   ├── SKILL.md           # Required: skill definition
 │   └── references/        # Optional: reference documentation
+├── design-memo/            # Design memo presentation skill
+│   └── SKILL.md           # Required: skill definition
 evals/                      # InspectAI evaluation suite
 ├── dns_skill_eval.py       # Evaluation tasks
 ├── dns_server.py           # Test DNS server

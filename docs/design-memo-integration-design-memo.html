@@ -1,0 +1,1059 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Design Memo - Integrating the design-memo Skill</title>
+    <script>
+      document.documentElement.className += " js";
+    </script>
+    <style>
+      :root {
+        color-scheme: light;
+        --paper: #cfd4cf;
+        --paper-deep: #7f8985;
+        --panel: #e6e6df;
+        --ink: #171c1d;
+        --muted: #4a5250;
+        --olive: #4a4f3f;
+        --amber: #9a7a55;
+        --ochre: #b79b65;
+        --mustard: #d6c7a4;
+        --teal: #2f5557;
+        --blue: #5f7f86;
+        --line: #9aa39d;
+        --code: #111819;
+        --code-bg: #bdc8c3;
+      }
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at 14% 0%, rgba(214, 199, 164, 0.5), transparent 28rem),
+          radial-gradient(circle at 86% 8%, rgba(95, 127, 134, 0.28), transparent 30rem),
+          linear-gradient(135deg, #dce0dc, var(--paper) 52%, var(--paper-deep));
+        color: var(--ink);
+        font-family: Georgia, "Times New Roman", Times, serif;
+        line-height: 1.55;
+      }
+
+      .progress-bar {
+        position: fixed;
+        z-index: 20;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 0.45rem;
+        background: rgba(23, 28, 29, 0.13);
+      }
+
+      .progress-bar__fill {
+        width: 0;
+        height: 100%;
+        background: linear-gradient(90deg, var(--olive), var(--ochre), var(--amber));
+        box-shadow: 0 0 18px rgba(74, 79, 63, 0.28);
+        transition: width 120ms linear;
+      }
+
+      .story-rail {
+        position: fixed;
+        z-index: 15;
+        top: 50%;
+        right: clamp(0.8rem, 2vw, 1.8rem);
+        display: grid;
+        gap: 0.8rem;
+        transform: translateY(-50%);
+      }
+
+      .story-dot {
+        position: relative;
+        width: 0.78rem;
+        height: 0.78rem;
+        padding: 0;
+        border: 1px solid var(--ink);
+        border-radius: 999px;
+        background: var(--panel);
+        cursor: pointer;
+        opacity: 0.72;
+        transition:
+          background 180ms ease,
+          transform 180ms ease,
+          opacity 180ms ease;
+      }
+
+      .story-dot:focus-visible {
+        outline: 2px solid var(--teal);
+        outline-offset: 4px;
+      }
+
+      .story-dot::after {
+        position: absolute;
+        top: 50%;
+        right: 1.15rem;
+        width: max-content;
+        max-width: 14rem;
+        padding: 0.22rem 0.5rem;
+        border: 1px solid var(--line);
+        background: rgba(230, 230, 223, 0.95);
+        color: var(--ink);
+        content: attr(aria-label);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+        font-size: 0.72rem;
+        letter-spacing: 0.04em;
+        opacity: 0;
+        pointer-events: none;
+        transform: translateY(-50%) translateX(0.3rem);
+        transition:
+          opacity 160ms ease,
+          transform 160ms ease;
+      }
+
+      .story-dot:hover::after,
+      .story-dot:focus-visible::after,
+      .story-dot.is-active::after {
+        opacity: 1;
+        transform: translateY(-50%) translateX(0);
+      }
+
+      .story-dot.is-active {
+        background: var(--olive);
+        opacity: 1;
+        transform: scale(1.35);
+      }
+
+      .chapter-indicator {
+        position: fixed;
+        z-index: 14;
+        bottom: clamp(1rem, 3vw, 2rem);
+        left: clamp(1rem, 4vw, 3rem);
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 0.6rem 0.85rem;
+        align-items: center;
+        max-width: min(28rem, calc(100vw - 7rem));
+        padding: 0.75rem 0.95rem;
+        border: 1px solid rgba(154, 122, 85, 0.8);
+        background: rgba(230, 230, 223, 0.84);
+        box-shadow: 0 10px 28px rgba(23, 28, 29, 0.14);
+        backdrop-filter: blur(8px);
+      }
+
+      .chapter-indicator__number {
+        color: var(--olive);
+        font-size: 1.55rem;
+        line-height: 1;
+      }
+
+      .chapter-indicator__label {
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+        font-size: 0.72rem;
+        font-weight: 800;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      .chapter-indicator__rule {
+        grid-column: 1 / -1;
+        height: 1px;
+        overflow: hidden;
+        background: rgba(23, 28, 29, 0.18);
+      }
+
+      .chapter-indicator__rule span {
+        display: block;
+        width: 0;
+        height: 100%;
+        background: var(--ochre);
+        transition: width 120ms linear;
+      }
+
+      main {
+        scroll-snap-type: y proximity;
+      }
+
+      section {
+        display: grid;
+        min-height: 100vh;
+        padding: 4.5rem clamp(1.25rem, 5vw, 6rem);
+        place-items: center;
+        scroll-snap-align: start;
+      }
+
+      .slide {
+        width: min(1180px, 100%);
+      }
+
+      .card {
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-top: 9px double var(--olive);
+        background:
+          linear-gradient(90deg, rgba(214, 199, 164, 0.26), transparent 36%),
+          rgba(230, 230, 223, 0.96);
+        box-shadow:
+          0 1px 0 rgba(23, 28, 29, 0.18),
+          0 18px 45px rgba(44, 55, 55, 0.16);
+        transition:
+          opacity 420ms ease,
+          transform 420ms ease,
+          box-shadow 420ms ease;
+      }
+
+      .js section:not(.is-active) .card {
+        opacity: 0.76;
+        transform: translateY(1.8rem) scale(0.985);
+      }
+
+      .js section.is-active .card {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        box-shadow:
+          0 1px 0 rgba(23, 28, 29, 0.18),
+          0 26px 70px rgba(44, 55, 55, 0.22);
+      }
+
+      .card-body {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(13rem, 0.28fr);
+        column-gap: clamp(2rem, 6vw, 5rem);
+        padding: clamp(2rem, 4vw, 4.6rem);
+      }
+
+      .card-body > * {
+        grid-column: 1;
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 1.1rem;
+        color: var(--teal);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+
+      .eyebrow::before {
+        width: 0.75rem;
+        height: 0.75rem;
+        border-radius: 999px;
+        background: var(--ochre);
+        content: "";
+      }
+
+      h1,
+      h2,
+      h3 {
+        margin: 0;
+        line-height: 1.05;
+      }
+
+      h1 {
+        max-width: 840px;
+        color: var(--olive);
+        font-size: clamp(3rem, 7vw, 6.25rem);
+        font-weight: 500;
+        letter-spacing: -0.045em;
+      }
+
+      h2 {
+        max-width: 800px;
+        color: var(--olive);
+        font-size: clamp(2.1rem, 4.6vw, 4.7rem);
+        font-weight: 500;
+        letter-spacing: -0.035em;
+      }
+
+      h3 {
+        margin-top: 1.6rem;
+        color: var(--teal);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+        font-size: 1rem;
+      }
+
+      p {
+        max-width: 720px;
+        margin: 1.2rem 0 0;
+        color: var(--muted);
+        font-size: clamp(1.05rem, 1.55vw, 1.23rem);
+      }
+
+      .lead {
+        max-width: 780px;
+        font-size: clamp(1.25rem, 2.2vw, 1.62rem);
+      }
+
+      .grid {
+        display: grid;
+        gap: 1rem;
+        margin-top: 2rem;
+      }
+
+      .grid-2 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .grid-3 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .source {
+        padding: 1rem 1.15rem;
+        border: 1px solid var(--line);
+        background: rgba(230, 230, 223, 0.68);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+      }
+
+      .source strong {
+        display: block;
+        margin-bottom: 0.35rem;
+      }
+
+      .callout {
+        grid-column: 2;
+        align-self: start;
+        margin-top: 2rem;
+        padding: 0.35rem 0 0.35rem 1rem;
+        border-left: 3px solid var(--teal);
+        color: var(--muted);
+        font-size: 0.98rem;
+        font-style: italic;
+      }
+
+      .callout.warning {
+        border-left-color: var(--ochre);
+      }
+
+      .callout.danger {
+        border-left-color: var(--olive);
+      }
+
+      code,
+      pre {
+        border-radius: 10px;
+        background: var(--code-bg);
+        color: var(--code);
+        font-family:
+          "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      }
+
+      code {
+        padding: 0.15rem 0.4rem;
+        font-size: 0.92em;
+      }
+
+      pre {
+        overflow-x: auto;
+        margin: 1.6rem 0 0;
+        padding: 1.2rem 1.35rem;
+        border: 1px solid var(--line);
+        border-left: 6px solid var(--blue);
+        font-size: 0.9rem;
+        line-height: 1.55;
+        white-space: pre-wrap;
+      }
+
+      table {
+        width: 100%;
+        margin-top: 1.8rem;
+        border-collapse: collapse;
+        overflow: hidden;
+        border-top: 2px solid var(--ink);
+        border-bottom: 2px solid var(--ink);
+        background: transparent;
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+        font-size: 0.88rem;
+      }
+
+      th,
+      td {
+        padding: 0.85rem 1rem;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        background: rgba(214, 199, 164, 0.32);
+        color: var(--ink);
+        font-size: 0.8rem;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+      }
+
+      tr:last-child td {
+        border-bottom: 0;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.2rem 0.55rem;
+        border-radius: 999px;
+        background: rgba(95, 127, 134, 0.2);
+        color: #355e66;
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+        font-size: 0.78rem;
+        font-weight: 800;
+        white-space: nowrap;
+      }
+
+      .badge.success {
+        background: rgba(31, 63, 70, 0.18);
+        color: #1f3f46;
+      }
+
+      .badge.warning {
+        background: rgba(214, 199, 164, 0.42);
+        color: #5e4a2e;
+      }
+
+      .badge.danger {
+        background: rgba(154, 122, 85, 0.28);
+        color: var(--olive);
+      }
+
+      ul,
+      ol {
+        max-width: 720px;
+        margin: 1.2rem 0 0 1.25rem;
+        color: var(--muted);
+        font-size: clamp(1rem, 1.45vw, 1.14rem);
+      }
+
+      li + li {
+        margin-top: 0.55rem;
+      }
+
+      .footer {
+        margin-top: 2rem;
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      @media (max-width: 820px) {
+        .story-rail,
+        .chapter-indicator {
+          display: none;
+        }
+
+        main {
+          scroll-snap-type: none;
+        }
+
+        section {
+          min-height: auto;
+          padding-block: 2rem;
+          scroll-snap-align: none;
+        }
+
+        .card-body {
+          grid-template-columns: 1fr;
+        }
+
+        .callout {
+          grid-column: 1;
+        }
+
+        .grid-2,
+        .grid-3 {
+          grid-template-columns: 1fr;
+        }
+
+        table {
+          display: block;
+          overflow-x: auto;
+          white-space: nowrap;
+        }
+      }
+
+      @media print {
+        .progress-bar,
+        .story-rail,
+        .chapter-indicator {
+          display: none;
+        }
+
+        body {
+          background: #fff;
+        }
+
+        main {
+          scroll-snap-type: none;
+        }
+
+        section {
+          min-height: auto;
+          break-inside: avoid;
+          page-break-after: always;
+        }
+
+        .card {
+          box-shadow: none;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          transition: none !important;
+        }
+
+        main {
+          scroll-snap-type: none;
+        }
+
+        section {
+          scroll-snap-align: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="progress-bar" role="progressbar" aria-label="Document scroll progress"
+         aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+      <div class="progress-bar__fill"></div>
+    </div>
+    <nav class="story-rail" aria-label="Section navigation"></nav>
+    <aside class="chapter-indicator" aria-live="polite">
+      <span class="chapter-indicator__number">01</span>
+      <span class="chapter-indicator__label">Design thesis</span>
+      <span class="chapter-indicator__rule"><span></span></span>
+    </aside>
+
+    <main>
+      <section>
+        <div class="slide">
+          <div class="card">
+            <header class="card-body">
+              <div class="eyebrow">Design thesis</div>
+              <h1>Make design memos feel like reviewable presentations</h1>
+              <p class="lead">
+                The <strong>design-memo</strong> skill makes self-contained HTML
+                memos the default output for non-trivial plans, architecture
+                proposals, implementation approaches, decision records, and
+                review documents.
+              </p>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Decision</th>
+                    <th>Default behavior</th>
+                    <th>Why it matters</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Output format</td>
+                    <td><span class="badge success">Standalone HTML</span></td>
+                    <td>Reviewers can scan, navigate, and share a memo without reading the chat transcript.</td>
+                  </tr>
+                  <tr>
+                    <td>Simple plans</td>
+                    <td><span class="badge warning">Ask first</span></td>
+                    <td>A two-line fix should not be forced into a full presentation.</td>
+                  </tr>
+                  <tr>
+                    <td>Visual system</td>
+                    <td>Tufte-inspired editorial layout with lightweight scrollytelling</td>
+                    <td>Dense implementation detail stays readable while still feeling like a presentation.</td>
+                  </tr>
+                </tbody>
+              </table>
+              <div class="callout warning">
+                This memo is now a proof of the scrollytelling template, not just
+                a long-form page with a progress bar.
+              </div>
+            </header>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="slide">
+          <div class="card">
+            <div class="card-body">
+              <div class="eyebrow">Branch integration</div>
+              <h2>What changed in this branch</h2>
+              <table>
+                <thead>
+                  <tr>
+                    <th>File</th>
+                    <th>Action</th>
+                    <th>Purpose</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><code>skills/design-memo/SKILL.md</code></td>
+                    <td><span class="badge success">new</span></td>
+                    <td>Skill definition: instructions, palette, accessibility, review quality bar, and HTML scaffold.</td>
+                  </tr>
+                  <tr>
+                    <td><code>manifest.json</code></td>
+                    <td><span class="badge">edit</span></td>
+                    <td>Registers <code>design-memo</code> in the skills array.</td>
+                  </tr>
+                  <tr>
+                    <td><code>Justfile</code></td>
+                    <td><span class="badge">edit</span></td>
+                    <td>Adds <code>skills/design-memo</code> to the validation recipe.</td>
+                  </tr>
+                  <tr>
+                    <td><code>README.md</code></td>
+                    <td><span class="badge">edit</span></td>
+                    <td>Adds the skill to the available skills table.</td>
+                  </tr>
+                  <tr>
+                    <td><code>.claude-plugin/marketplace.json</code></td>
+                    <td><span class="badge">edit</span></td>
+                    <td>Adds the marketplace entry for the new skill.</td>
+                  </tr>
+                  <tr>
+                    <td><code>.claude-plugin/plugin.json</code></td>
+                    <td><span class="badge">edit</span></td>
+                    <td>Broadens the description to describe a multi-skill collection.</td>
+                  </tr>
+                  <tr>
+                    <td><code>AGENTS.md</code></td>
+                    <td><span class="badge">edit</span></td>
+                    <td>Documents design-memo validation and repository structure.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="slide">
+          <div class="card">
+            <div class="card-body">
+              <div class="eyebrow">Template behavior</div>
+              <h2>The memo behaves like a guided scroll</h2>
+              <div class="grid grid-2">
+                <div class="source">
+                  <strong>Progress bar</strong>
+                  <span>Fixed at the top and exposed as a named ARIA progressbar.</span>
+                </div>
+                <div class="source">
+                  <strong>Section rail</strong>
+                  <span>Keyboard-focusable dots are generated from each section and show hover/focus labels.</span>
+                </div>
+                <div class="source">
+                  <strong>Chapter indicator</strong>
+                  <span>Fixed bottom-left, updates the section number and eyebrow label as the reader scrolls.</span>
+                </div>
+                <div class="source">
+                  <strong>Active cards</strong>
+                  <span>Cards lift and brighten as they become active; no-JS readers still get fully readable content.</span>
+                </div>
+              </div>
+              <div class="callout">
+                The key shift from the old memo is the slide/card rhythm:
+                each section gets a full-height stage and a focused review unit.
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="slide">
+          <div class="card">
+            <div class="card-body">
+              <div class="eyebrow">Design decisions</div>
+              <h2>The skill keeps an escape hatch for lightweight work</h2>
+              <div class="grid grid-2">
+                <div class="source">
+                  <strong>Trigger scope</strong>
+                  <span>Use the skill for plans, designs, proposals, implementation approaches, decision records, and review documents.</span>
+                </div>
+                <div class="source">
+                  <strong>Simple plans</strong>
+                  <span>Ask whether plain text would be better for quick fixes or single-step tasks.</span>
+                </div>
+                <div class="source">
+                  <strong>Output location</strong>
+                  <span>Suggest <code>design-memos/</code> by default, but honor user-specified locations such as <code>plans/</code> or <code>docs/</code>.</span>
+                </div>
+                <div class="source">
+                  <strong>Plugin metadata</strong>
+                  <span>Keep <code>plugin.json</code> name stable and broaden only the description.</span>
+                </div>
+              </div>
+              <div class="callout warning">
+                The default is HTML for non-trivial work, not HTML for every
+                response. The skill still requires judgment.
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="slide">
+          <div class="card">
+            <div class="card-body">
+              <div class="eyebrow">Skill structure</div>
+              <h2>The instruction set now describes both content and presentation</h2>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Area</th>
+                    <th>What the skill specifies</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Purpose and output</td>
+                    <td>Standalone HTML memos with inline CSS/JS and enough implementation detail for review.</td>
+                  </tr>
+                  <tr>
+                    <td>Visual direction</td>
+                    <td>Tufte-inspired editorial layout with an Arrival-inspired palette.</td>
+                  </tr>
+                  <tr>
+                    <td>Scrollytelling</td>
+                    <td>Progress, section rail, chapter indicator, active-card transitions, and small-screen simplification.</td>
+                  </tr>
+                  <tr>
+                    <td>Accessibility</td>
+                    <td>WCAG contrast, keyboard dots, ARIA progress, active-step state, no-JS fallback, and reduced motion.</td>
+                  </tr>
+                  <tr>
+                    <td>Review quality</td>
+                    <td>Explicit rule ordering, validation matrices, source footers, caveats, and unknown/default behavior.</td>
+                  </tr>
+                  <tr>
+                    <td>HTML skeleton</td>
+                    <td>Cards, grids, source blocks, badges, callouts, code blocks, semantic landmarks, and generated navigation.</td>
+                  </tr>
+                </tbody>
+              </table>
+              <pre>skills/design-memo/
+  SKILL.md          # YAML frontmatter + design memo instructions</pre>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="slide">
+          <div class="card">
+            <div class="card-body">
+              <div class="eyebrow">Accessibility</div>
+              <h2>The richer presentation keeps the accessibility contract</h2>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Requirement</th>
+                    <th>Implementation</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Progress</td>
+                    <td><code>role="progressbar"</code>, named label, and updated <code>aria-valuenow</code>.</td>
+                  </tr>
+                  <tr>
+                    <td>Keyboard navigation</td>
+                    <td>Rail dots are real <code>&lt;button&gt;</code> elements with visible focus rings and section number shortcuts.</td>
+                  </tr>
+                  <tr>
+                    <td>Presentation shortcuts</td>
+                    <td><code>ArrowRight</code>, <code>ArrowDown</code>, <code>PageDown</code>, and <code>Space</code> advance; <code>ArrowLeft</code>, <code>ArrowUp</code>, and <code>PageUp</code> go back; <code>1</code>-<code>9</code> jump to sections.</td>
+                  </tr>
+                  <tr>
+                    <td>Current section</td>
+                    <td>Only the active dot receives <code>aria-current="step"</code>; inactive dots omit the attribute.</td>
+                  </tr>
+                  <tr>
+                    <td>No JavaScript</td>
+                    <td>Content remains visible by default; dimming is scoped to the generated <code>.js</code> class.</td>
+                  </tr>
+                  <tr>
+                    <td>Reduced motion</td>
+                    <td>Transitions, smooth scrolling, and scroll snapping are disabled for reduced-motion users.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="slide">
+          <div class="card">
+            <div class="card-body">
+              <div class="eyebrow">Scope boundaries</div>
+              <h2>What was intentionally left out</h2>
+              <div class="grid grid-2">
+                <div class="source">
+                  <strong><code>install.sh</code></strong>
+                  <span>Already skill-agnostic; it accepts the skill name as an argument.</span>
+                </div>
+                <div class="source">
+                  <strong><code>release.yml</code></strong>
+                  <span>Still hardcoded around dns-troubleshooter. A future PR should make releases multi-skill-aware.</span>
+                </div>
+                <div class="source">
+                  <strong><code>evals/</code></strong>
+                  <span>No automated quality evals for design-memo yet.</span>
+                </div>
+                <div class="source">
+                  <strong><code>CONTRIBUTING.md</code></strong>
+                  <span>Generic enough; no design-memo-specific update was required.</span>
+                </div>
+              </div>
+              <div class="callout">
+                The release workflow is the main follow-up when this skill needs
+                independent versioned releases.
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="slide">
+          <div class="card">
+            <div class="card-body">
+              <div class="eyebrow">Confidence and caveats</div>
+              <h2>The branch is ready with one known operational gap</h2>
+              <div class="grid grid-2">
+                <div class="source">
+                  <strong>High confidence</strong>
+                  <span>The skill validates, follows the repository patterns, and this memo exercises the richer HTML scaffold.</span>
+                </div>
+                <div class="source">
+                  <strong>Medium confidence</strong>
+                  <span>The trigger scope depends on agent judgment for the line between "quick plan" and "non-trivial memo".</span>
+                </div>
+                <div class="source">
+                  <strong>Known gap</strong>
+                  <span>There are no automated evals for presentation quality yet.</span>
+                </div>
+                <div class="source">
+                  <strong>Follow-up</strong>
+                  <span>Parameterize or split <code>release.yml</code> before publishing multiple independently versioned skills.</span>
+                </div>
+              </div>
+              <div class="footer">
+                Sources reviewed: <code>skills/design-memo/SKILL.md</code>,
+                <code>manifest.json</code>, <code>Justfile</code>,
+                <code>README.md</code>, <code>AGENTS.md</code>, and plugin
+                metadata.
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      (function () {
+        var sections = document.querySelectorAll("main > section");
+        var rail = document.querySelector(".story-rail");
+        var progress = document.querySelector(".progress-bar");
+        var progressFill = document.querySelector(".progress-bar__fill");
+        var chapterNumber = document.querySelector(".chapter-indicator__number");
+        var chapterLabel = document.querySelector(".chapter-indicator__label");
+        var chapterRule = document.querySelector(".chapter-indicator__rule span");
+        var dots = [];
+        var activeIndex = 0;
+        var prefersReducedMotion = window.matchMedia &&
+          window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+        function sectionTitle(section, index) {
+          var label = section.querySelector(".eyebrow");
+          var heading = section.querySelector("h1, h2");
+          if (label && heading) return label.textContent + ": " + heading.textContent;
+          if (heading) return heading.textContent;
+          return "Section " + String(index + 1);
+        }
+
+        function twoDigit(value) {
+          return value < 10 ? "0" + value : String(value);
+        }
+
+        function isEditableTarget(target) {
+          if (!target) return false;
+          var tagName = target.tagName ? target.tagName.toLowerCase() : "";
+          return target.isContentEditable ||
+            tagName === "input" ||
+            tagName === "textarea" ||
+            tagName === "select";
+        }
+
+        function scrollToSection(index) {
+          if (index < 0) index = 0;
+          if (index >= sections.length) index = sections.length - 1;
+          var target = sections[index];
+          if (!target) return;
+
+          target.scrollIntoView({
+            behavior: prefersReducedMotion ? "auto" : "smooth",
+            block: "start"
+          });
+        }
+
+        function buildRail() {
+          if (!rail) return;
+
+          for (var index = 0; index < sections.length; index += 1) {
+            var dot = document.createElement("button");
+            dot.className = "story-dot";
+            dot.type = "button";
+            dot.setAttribute("aria-label", sectionTitle(sections[index], index));
+            if (index < 9) {
+              dot.setAttribute("aria-keyshortcuts", String(index + 1));
+            }
+            dot.dataset.index = String(index);
+            dot.addEventListener("click", function () {
+              scrollToSection(Number(this.dataset.index));
+            });
+            rail.appendChild(dot);
+            dots.push(dot);
+          }
+        }
+
+        function currentSectionIndex() {
+          var viewportMiddle = window.scrollY + window.innerHeight * 0.45;
+          var current = 0;
+
+          for (var index = 0; index < sections.length; index += 1) {
+            if (sections[index].offsetTop <= viewportMiddle) current = index;
+          }
+
+          return current;
+        }
+
+        function updateProgress() {
+          var documentHeight = document.documentElement.scrollHeight - window.innerHeight;
+          var pct = documentHeight > 0 ? window.scrollY / documentHeight : 0;
+          pct = Math.max(0, Math.min(1, pct));
+
+          if (progressFill) progressFill.style.width = pct * 100 + "%";
+          if (chapterRule) chapterRule.style.width = pct * 100 + "%";
+          if (progress) progress.setAttribute("aria-valuenow", String(Math.round(pct * 100)));
+        }
+
+        function updateActiveSection() {
+          activeIndex = currentSectionIndex();
+
+          for (var index = 0; index < sections.length; index += 1) {
+            var isActive = index === activeIndex;
+            sections[index].classList.toggle("is-active", isActive);
+            if (dots[index]) {
+              dots[index].classList.toggle("is-active", isActive);
+              if (isActive) {
+                dots[index].setAttribute("aria-current", "step");
+              } else {
+                dots[index].removeAttribute("aria-current");
+              }
+            }
+          }
+
+          if (chapterNumber) chapterNumber.textContent = twoDigit(activeIndex + 1);
+          if (chapterLabel && sections[activeIndex]) {
+            var label = sections[activeIndex].querySelector(".eyebrow");
+            chapterLabel.textContent = label ? label.textContent : "Section " + String(activeIndex + 1);
+          }
+        }
+
+        function updateStoryState() {
+          updateProgress();
+          updateActiveSection();
+        }
+
+        function handleKeydown(event) {
+          if (event.defaultPrevented ||
+              event.altKey ||
+              event.ctrlKey ||
+              event.metaKey ||
+              isEditableTarget(event.target)) {
+            return;
+          }
+
+          var tagName = event.target && event.target.tagName
+            ? event.target.tagName.toLowerCase()
+            : "";
+          if (tagName === "button" && (event.key === " " || event.key === "Enter")) {
+            return;
+          }
+
+          if (/^[1-9]$/.test(event.key)) {
+            var sectionIndex = Number(event.key) - 1;
+            if (sectionIndex < sections.length) {
+              event.preventDefault();
+              scrollToSection(sectionIndex);
+            }
+            return;
+          }
+
+          if (event.key === "ArrowRight" ||
+              event.key === "ArrowDown" ||
+              event.key === "PageDown" ||
+              event.key === " ") {
+            event.preventDefault();
+            scrollToSection(currentSectionIndex() + 1);
+            return;
+          }
+
+          if (event.key === "ArrowLeft" ||
+              event.key === "ArrowUp" ||
+              event.key === "PageUp") {
+            event.preventDefault();
+            scrollToSection(currentSectionIndex() - 1);
+            return;
+          }
+
+          if (event.key === "Home") {
+            event.preventDefault();
+            scrollToSection(0);
+            return;
+          }
+
+          if (event.key === "End") {
+            event.preventDefault();
+            scrollToSection(sections.length - 1);
+          }
+        }
+
+        buildRail();
+        updateStoryState();
+        window.addEventListener("scroll", updateStoryState, { passive: true });
+        window.addEventListener("resize", updateStoryState);
+        window.addEventListener("keydown", handleKeydown);
+      })();
+    </script>
+  </body>
+</html>
