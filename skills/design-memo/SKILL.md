@@ -58,11 +58,14 @@ without reading the chat transcript.
 
 ## Output Location
 
-- Place the output HTML file in a `docs/` subdirectory if one exists in the
-  project.
-- If no `docs/` directory exists, ask the user whether to create one or place
-  the file in the current working directory.
-- Never create `docs/` without user confirmation.
+- If the user specifies an output directory, use that location. Examples:
+  `plans/`, `docs/`, `architecture/`, or a fully specified file path.
+- If the user does not specify a location, suggest `design-memos/` as the default
+  directory for HTML design memos.
+- If `design-memos/` already exists, place the output file there by default.
+- If `design-memos/` does not exist, ask the user whether to create it or choose
+  another location.
+- Never create a new output directory without user confirmation.
 
 ## Output File Naming
 
