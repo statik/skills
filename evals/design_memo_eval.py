@@ -40,7 +40,7 @@ from inspect_ai.solver import Solver, TaskState, solver
 
 import html_scorers as hs
 
-SKILL_PATH = Path(__file__).parent.parent / "skills" / "design-memo"
+SKILL_PATH = Path(__file__).parent.parent / "design-memo" / "skills" / "design-memo"
 CLI_TIMEOUT = int(os.environ.get("DESIGN_MEMO_TIMEOUT", "180"))
 CLAUDE_BIN = os.environ.get("CLAUDE_BIN", "claude")
 
