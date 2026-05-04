@@ -34,13 +34,21 @@ test-codex log_dir="" display="":
 # Alias: default test command (Claude Code CLI + Anthropic)
 test log_dir="" display="": (test-claude-anthropic log_dir display)
 
+# Run tier-1 design-memo HTML scorer tests (no LLM calls, fast)
+test-design-memo:
+    cd evals && uv run pytest test_html_scorers.py -v
+
 # Start the test DNS server (runs in foreground)
 dns-server:
     cd evals && uv run python dns_server.py
 
-# Run quick validation (no evals, just structure checks)
-check: validate
+# Run quick validation: structure checks plus tier-1 design-memo scorer tests
+check: validate test-design-memo
     @echo "All validation checks passed!"
+
+# Tier-2: end-to-end design-memo eval via Claude Code CLI (LOCAL ONLY — costs LLM calls; not run in CI)
+test-design-memo-cli log_dir="" display="":
+    cd evals && uv run inspect eval design_memo_eval.py --model {{ anthropic_sonnet }} {{ if log_dir != "" { "--log-dir " + log_dir } else { "" } }} {{ if display != "" { "--display " + display } else { "" } }}
 
 # Clean generated files
 clean:

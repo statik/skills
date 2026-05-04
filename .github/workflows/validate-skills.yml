@@ -28,8 +28,17 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v5
 
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install eval dev deps
+        run: cd evals && uv sync --extra dev
+
       - name: Validate skills
         run: just validate
+
+      - name: Tier-1 design-memo scorer tests (no LLM calls)
+        run: just test-design-memo
 
   run-evals:
     runs-on: ubuntu-latest
