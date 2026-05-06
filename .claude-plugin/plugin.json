@@ -1,6 +1,0 @@
-{
-  "name": "dns-troubleshooter",
-  "description": "A collection of skills including DNS troubleshooting and design memo generation",
-  "version": "1.0.0",
-  "repository": "https://github.com/statik/skills"
-}

@@ -6,8 +6,8 @@ A collection of skills that extend Claude's capabilities for specialized tasks.
 
 | Skill | Description |
 |-------|-------------|
-| [dns-troubleshooter](./skills/dns-troubleshooter/) | *It's not DNS / There's no way it's DNS / It was DNS.* Diagnose DNS issues including delegation verification, SPF validation, record conflicts, and authoritative vs local DNS comparison |
-| [design-memo](./skills/design-memo/) | Produce polished, self-contained HTML design memos with Tufte-inspired layout and scrollytelling — the default output for any plan, design, or architecture proposal |
+| [dns-troubleshooter](./dns-troubleshooter/skills/dns-troubleshooter/) | *It's not DNS / There's no way it's DNS / It was DNS.* Diagnose DNS issues including delegation verification, SPF validation, record conflicts, and authoritative vs local DNS comparison |
+| [design-memo](./design-memo/skills/design-memo/) | Produce polished, self-contained HTML design memos with Tufte-inspired layout and scrollytelling — the default output for any plan, design, or architecture proposal |
 
 > **Copilot Compatible:** All skills in this repository work with both Claude and GitHub Copilot (December 2025+).
 
@@ -20,6 +20,25 @@ Install directly as a Claude Code plugin:
 ```bash
 /plugin marketplace add statik/skills
 /plugin install dns-troubleshooter@statik-skills
+/plugin install design-memo@statik-skills
+```
+
+### Migrating from a previous install
+
+If you installed this marketplace before the plugins were split apart, you have a single `dns-troubleshooter` plugin that quietly bundled both skills. After updating, that plugin contains only the DNS skill — install `design-memo` separately to keep using it:
+
+```bash
+/plugin marketplace update statik-skills
+/plugin update dns-troubleshooter@statik-skills
+/plugin install design-memo@statik-skills
+```
+
+If `/plugin update` errors out because the plugin's source path changed, uninstall and reinstall:
+
+```bash
+/plugin uninstall dns-troubleshooter@statik-skills
+/plugin install dns-troubleshooter@statik-skills
+/plugin install design-memo@statik-skills
 ```
 
 ### Install Script
@@ -57,6 +76,7 @@ Skills can be added to Claude in several ways depending on your environment.
 ```bash
 /plugin marketplace add statik/skills
 /plugin install dns-troubleshooter@statik-skills
+/plugin install design-memo@statik-skills
 ```
 
 **Option 2: Manual install**
@@ -68,14 +88,14 @@ Clone this repository and copy skills to your project's `.claude/skills/` direct
 git clone https://github.com/statik/skills.git
 
 # Copy a skill to your project
-cp -r skills/skills/dns-troubleshooter /path/to/your/project/.claude/skills/
+cp -r skills/dns-troubleshooter/skills/dns-troubleshooter /path/to/your/project/.claude/skills/
 ```
 
 Or add skills globally to `~/.claude/skills/`:
 
 ```bash
 mkdir -p ~/.claude/skills
-cp -r skills/skills/dns-troubleshooter ~/.claude/skills/
+cp -r skills/dns-troubleshooter/skills/dns-troubleshooter ~/.claude/skills/
 ```
 
 ### Codex CLI
@@ -87,7 +107,7 @@ Codex loads skills from `$CODEX_HOME/skills` (defaults to `~/.codex/skills`). In
 export OPENAI_API_KEY="your-key"
 
 mkdir -p ~/.codex/skills
-cp -r skills/skills/dns-troubleshooter ~/.codex/skills/
+cp -r skills/dns-troubleshooter/skills/dns-troubleshooter ~/.codex/skills/
 ```
 
 To run Codex with the skill available:
@@ -103,21 +123,21 @@ OpenCode natively supports skills in the same format. Copy skills to one of thes
 **Project-level (recommended):**
 ```bash
 # Native skills directory (OpenCode v1.0.190+)
-cp -r skills/skills/dns-troubleshooter /path/to/your/project/skill/
+cp -r skills/dns-troubleshooter/skills/dns-troubleshooter /path/to/your/project/skill/
 
 # Or the .opencode directory
-cp -r skills/skills/dns-troubleshooter /path/to/your/project/.opencode/skills/
+cp -r skills/dns-troubleshooter/skills/dns-troubleshooter /path/to/your/project/.opencode/skills/
 ```
 
 **Global installation:**
 ```bash
 # XDG config location (Linux/macOS)
 mkdir -p ~/.config/opencode/skills
-cp -r skills/skills/dns-troubleshooter ~/.config/opencode/skills/
+cp -r skills/dns-troubleshooter/skills/dns-troubleshooter ~/.config/opencode/skills/
 
 # Alternative global location
 mkdir -p ~/.opencode/skills
-cp -r skills/skills/dns-troubleshooter ~/.opencode/skills/
+cp -r skills/dns-troubleshooter/skills/dns-troubleshooter ~/.opencode/skills/
 ```
 
 ### VS Code with GitHub Copilot
@@ -159,19 +179,19 @@ Skills can be added to Claude.app by placing them in your user skills directory:
 **macOS:**
 ```bash
 mkdir -p ~/Library/Application\ Support/Claude/skills
-cp -r skills/dns-troubleshooter ~/Library/Application\ Support/Claude/skills/
+cp -r dns-troubleshooter/skills/dns-troubleshooter ~/Library/Application\ Support/Claude/skills/
 ```
 
 **Windows:**
 ```powershell
 mkdir -p "$env:APPDATA\Claude\skills"
-Copy-Item -Recurse skills\dns-troubleshooter "$env:APPDATA\Claude\skills\"
+Copy-Item -Recurse dns-troubleshooter\skills\dns-troubleshooter "$env:APPDATA\Claude\skills\"
 ```
 
 **Linux:**
 ```bash
 mkdir -p ~/.config/claude/skills
-cp -r skills/dns-troubleshooter ~/.config/claude/skills/
+cp -r dns-troubleshooter/skills/dns-troubleshooter ~/.config/claude/skills/
 ```
 
 ## Using Skills

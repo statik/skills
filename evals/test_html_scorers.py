@@ -1,7 +1,7 @@
 """Tier-1 fixture-only tests for design-memo HTML scorers.
 
 No LLM calls. The canonical "good" memo is the HTML skeleton embedded in
-skills/design-memo/SKILL.md - extracting it here keeps the spec authoritative.
+design-memo/skills/design-memo/SKILL.md - extracting it here keeps the spec authoritative.
 Negative cases are surgical mutations of the good skeleton, so each failing
 assertion points at exactly one defect.
 """
@@ -15,7 +15,7 @@ import pytest
 
 import html_scorers as hs
 
-SKILL_MD = Path(__file__).parent.parent / "skills" / "design-memo" / "SKILL.md"
+SKILL_MD = Path(__file__).parent.parent / "design-memo" / "skills" / "design-memo" / "SKILL.md"
 
 
 # ---------- fixture extraction ----------

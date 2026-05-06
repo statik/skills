@@ -7,7 +7,7 @@
     {
       "name": "dns-troubleshooter",
       "version": "1.0.0",
-      "path": "skills/dns-troubleshooter",
+      "path": "dns-troubleshooter/skills/dns-troubleshooter",
       "description": "Diagnose and troubleshoot DNS issues including delegation verification, record conflicts, authoritative vs local DNS comparison, and SPF validation",
       "keywords": ["dns", "networking", "troubleshooting", "spf", "email"],
       "platforms": ["claude-code", "opencode", "github-copilot", "claude-desktop"],
@@ -19,7 +19,7 @@
     {
       "name": "design-memo",
       "version": "1.0.0",
-      "path": "skills/design-memo",
+      "path": "design-memo/skills/design-memo",
       "description": "Produce polished, self-contained HTML design memos with Tufte-inspired editorial layout and scrollytelling interaction for any plan, design, or architecture proposal",
       "keywords": ["design", "architecture", "plan", "presentation", "html", "tufte", "scrollytelling"],
       "platforms": ["claude-code", "opencode", "github-copilot", "claude-desktop"],

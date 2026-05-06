@@ -11,7 +11,7 @@
   "plugins": [
     {
       "name": "dns-troubleshooter",
-      "source": "./",
+      "source": "./dns-troubleshooter",
       "description": "Diagnose and troubleshoot DNS issues including delegation verification, record conflicts, authoritative vs local DNS comparison, and SPF validation",
       "version": "1.0.0",
       "license": "MIT",
@@ -20,7 +20,7 @@
     },
     {
       "name": "design-memo",
-      "source": "./",
+      "source": "./design-memo",
       "description": "Produce polished, self-contained HTML design memos with Tufte-inspired editorial layout and scrollytelling interaction for any plan, design, or architecture proposal",
       "version": "1.0.0",
       "license": "MIT",
