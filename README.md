@@ -20,6 +20,25 @@ Install directly as a Claude Code plugin:
 ```bash
 /plugin marketplace add statik/skills
 /plugin install dns-troubleshooter@statik-skills
+/plugin install design-memo@statik-skills
+```
+
+### Migrating from a previous install
+
+If you installed this marketplace before the plugins were split apart, you have a single `dns-troubleshooter` plugin that quietly bundled both skills. After updating, that plugin contains only the DNS skill — install `design-memo` separately to keep using it:
+
+```bash
+/plugin marketplace update statik-skills
+/plugin update dns-troubleshooter@statik-skills
+/plugin install design-memo@statik-skills
+```
+
+If `/plugin update` errors out because the plugin's source path changed, uninstall and reinstall:
+
+```bash
+/plugin uninstall dns-troubleshooter@statik-skills
+/plugin install dns-troubleshooter@statik-skills
+/plugin install design-memo@statik-skills
 ```
 
 ### Install Script
@@ -57,6 +76,7 @@ Skills can be added to Claude in several ways depending on your environment.
 ```bash
 /plugin marketplace add statik/skills
 /plugin install dns-troubleshooter@statik-skills
+/plugin install design-memo@statik-skills
 ```
 
 **Option 2: Manual install**
